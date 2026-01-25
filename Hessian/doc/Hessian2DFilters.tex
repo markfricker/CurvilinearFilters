@@ -1,0 +1,237 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+
+\geometry{margin=1in}
+
+\title{Hessian2DFilters:\\ ...
+	A Clean Multiscale Hessian-Based Filtering Framework (2D)}
+\author{ }
+\date{\today}
+
+\begin{document}
+	\maketitle
+	
+	\section{Overview}
+	
+	This document describes \texttt{hessian2DFilters}, a clean and well-tested
+	implementation of multiscale Hessian-based filters for 2D images.
+	
+	The framework is designed for \emph{geometric feature detection}, not
+	classification or segmentation, and explicitly excludes tensor-based or
+	nonlinear multiscale evolution methods such as MFAT or RLINE.
+	
+	\medskip
+	Core principles:
+	\begin{itemize}
+		\item Stateless per-scale evaluation
+		\item Max-over-scales aggregation
+		\item Scalar responses derived from Hessian eigenvalues
+		\item Clear separation of algorithm families
+	\end{itemize}
+	
+	\section{Supported Filters}
+	
+	\begin{table}[H]
+		\centering
+		\caption{Supported Hessian-Based Filters}
+		\begin{tabular}{lll}
+			\toprule
+			\textbf{FilterType} & \textbf{Detects} & \textbf{Typical Applications} \\
+			\midrule
+			vesselness  & Tubular structures & Blood vessels, pipes \\
+			ridge       & Line-like ridges & Curvilinear features \\
+			neuriteness & Curvilinear continuity & Neurites, filaments \\
+			blob        & Isotropic blobs & Vesicles, spots \\
+			plate       & Thick elongated regions & Membranes, bands \\
+			\bottomrule
+		\end{tabular}
+	\end{table}
+	
+	\noindent
+	\textbf{Non-goals:} MFAT, RLINE, tensor FA, scale summation, logical gating.
+	
+	\section{Algorithm Description}
+	
+	For each Gaussian scale $\sigma$, the algorithm performs:
+	
+	\begin{enumerate}
+		\item Gaussian smoothing of the image
+		\item Computation of the Hessian matrix
+		\[
+		H =
+		\begin{bmatrix}
+			I_{xx} & I_{xy} \\
+			I_{xy} & I_{yy}
+		\end{bmatrix}
+		\]
+		\item Eigenvalue and eigenvector decomposition
+		\item Evaluation of a scalar response function
+		\item Max-over-scales aggregation
+	\end{enumerate}
+	
+	This design ensures predictable behavior and avoids inter-scale feedback.
+	
+	\section{Eigenvalue Convention}
+	
+	Eigenvalues are interpreted as:
+	\[
+	|\lambda_1| \le |\lambda_2|
+	\]
+	
+	For bright structures on a dark background, line-like geometry corresponds to:
+	\[
+	\lambda_2 < 0
+	\]
+	
+	Eigenvalue ordering required by specific filters (e.g.\ Frangi vesselness)
+	is enforced locally within the response function.
+	
+	\section{Filter-Specific Invariants}
+	
+	\begin{table}[H]
+		\centering
+		\caption{Mathematical Invariants of Each Filter}
+		\begin{tabular}{p{3cm} p{5cm} p{5cm}}
+			\toprule
+			\textbf{Filter} & \textbf{Guarantees} & \textbf{Does Not Guarantee} \\
+			\midrule
+			Vesselness & Tubes $>$ background, blob suppression & Thin $>$ thick, binary output \\
+			Ridge & Structured regions $>$ background & Blob suppression \\
+			Neuriteness & Orientation sensitivity & Blob suppression \\
+			Blobness & Blob centers $>$ background & Zero response on lines \\
+			Plateness & Thick $>$ thin elongated regions & Blob suppression \\
+			\bottomrule
+		\end{tabular}
+	\end{table}
+	
+	\section{Parameter Tuning}
+	
+	\subsection{Scale Selection}
+	
+	Rule of thumb:
+	\[
+	\text{structure width} \approx 2\sigma
+	\]
+	
+	\begin{table}[H]
+		\centering
+		\caption{Typical Scale Ranges}
+		\begin{tabular}{ll}
+			\toprule
+			\textbf{Structure} & \textbf{Suggested $\sigma$ Range} \\
+			\midrule
+			Thin filaments & $0.5$ -- $2$ \\
+			Vessels & $1$ -- $6$ \\
+			Thick bands & $3$ -- $8$ \\
+			\bottomrule
+		\end{tabular}
+	\end{table}
+	
+	\subsection{Filter Parameters}
+	
+	\begin{itemize}
+		\item \textbf{Vesselness:}
+		\begin{itemize}
+			\item $\beta$ (tube vs blob discrimination): $0.3$--$0.7$
+			\item $c$ (noise suppression): $10$--$20$
+		\end{itemize}
+		\item \textbf{Ridge / Plate:}
+		\begin{itemize}
+			\item $\alpha$ (anisotropy penalty): $\approx 0.5$
+		\end{itemize}
+	\end{itemize}
+	
+	\section{Example Figures}
+	
+	\subsection{Synthetic Test Image}
+	
+	\begin{figure}[H]
+		\centering
+		\includegraphics[width=0.6\linewidth]{figures/test_image.png}
+		\caption{Synthetic test image with thin, medium, and thick lines, diagonal
+			structures, blobs of varying size, and noise.}
+	\end{figure}
+	
+	\subsection{Filter Responses}
+	
+	\begin{figure}[H]
+		\centering
+		\begin{subfigure}{0.45\linewidth}
+			\includegraphics[width=\linewidth]{figures/vesselness.png}
+			\caption{Vesselness}
+		\end{subfigure}
+		\hfill
+		\begin{subfigure}{0.45\linewidth}
+			\includegraphics[width=\linewidth]{figures/ridge.png}
+			\caption{Ridge}
+		\end{subfigure}
+		
+		\medskip
+		
+		\begin{subfigure}{0.45\linewidth}
+			\includegraphics[width=\linewidth]{figures/blob.png}
+			\caption{Blobness}
+		\end{subfigure}
+		\hfill
+		\begin{subfigure}{0.45\linewidth}
+			\includegraphics[width=\linewidth]{figures/plate.png}
+			\caption{Plateness}
+		\end{subfigure}
+		
+		\caption{Example responses of Hessian-based filters applied to the test image.
+			Each filter highlights different geometric structures.}
+	\end{figure}
+	
+	\section{Unit Testing}
+	
+	The implementation is accompanied by a comprehensive unit test suite that
+	verifies:
+	
+	\begin{itemize}
+		\item Eigenvalue ordering correctness
+		\item Filter-specific geometric invariants
+		\item Parameter robustness
+		\item Performance regression bounds
+	\end{itemize}
+	
+	Tests are executed using:
+	\begin{verbatim}
+		results = runtests('tests');
+	\end{verbatim}
+	
+	\section{Non-Goals}
+	
+	This framework does \textbf{not} implement:
+	
+	\begin{itemize}
+		\item MFAT (Alhasson / Obara)
+		\item RLINE / flux-based methods
+		\item Tensor FA evolution
+		\item Logical classification or segmentation
+		\item Scale summation or nonlinear inter-scale feedback
+	\end{itemize}
+	
+	Such methods require a fundamentally different algorithmic structure.
+	
+	\section{References}
+	
+	\begin{enumerate}
+		\item A. F. Frangi et al., \emph{Multiscale Vessel Enhancement Filtering},
+		MICCAI, 1998.
+		\item Y. Sato et al., \emph{Three-dimensional multi-scale line filter},
+		Medical Image Analysis, 1998.
+		\item E. Meijering et al., \emph{Design and validation of a tool for neurite tracing},
+		Cytometry A, 2004.
+		\item T. Lindeberg, \emph{Scale-Space Theory in Computer Vision},
+		IJCV, 1998.
+	\end{enumerate}
+	
+\end{document}
