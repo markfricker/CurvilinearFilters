@@ -5,8 +5,8 @@ clear; clc;
 
 I = generateTestImage(256);
 
-filters = {'vesselness','ridge','neuriteness','blob','plate'};
-titles  = {'Vesselness','Ridge','Neuriteness','Blobness','Plateness'};
+filters = {'vesselness','ridge','blob','plate'};
+titles  = {'Vesselness','Ridge','Blobness','Plateness'};
 
 figure('Name','Hessian Filter Comparison','Position',[100 100 1200 500]);
 

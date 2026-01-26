@@ -5,8 +5,8 @@ clear; clc;
 
 I = generateTestImage(256);
 
-filters = {'vesselness','ridge','neuriteness','blob','plate'};
-titles  = {'Vesselness','Ridge','Neuriteness','Blobness','Plateness'};
+filters = {'vesselness','ridge','blob','plate'};
+titles  = {'Vesselness','Ridge','Blobness','Plateness'};
 
 
 sigmas = autoLearnHessianScales(I,0.5,8,0.5);
@@ -15,7 +15,7 @@ figure('Name','Hessian Filter Comparison','Position',[100 100 1200 500]);
 
 subplot(2,3,1);
 imshow(I,[]);
-title(['Input ' num2str(sigmas)]);
+title(['Input - sigmas ' num2str(sigmas)]);
 
 for k = 1:numel(filters)
     R = hessian2DFilters(I, ...
