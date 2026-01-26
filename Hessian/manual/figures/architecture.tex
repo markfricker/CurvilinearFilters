@@ -1,0 +1,19 @@
+\documentclass[tikz,border=5pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning}
+
+\begin{document}
+	\begin{tikzpicture}[
+		box/.style={draw, rounded corners, align=center, minimum width=3cm, minimum height=1cm},
+		arrow/.style={->, thick}
+		]
+		
+		\node[box] (core) {Numerical Core\\Hessian2D\\eig2image};
+		\node[box, above=1.5cm of core] (engine) {Multiscale Engine\\vesselness\\ridge\\blobness\\plateness};
+		\node[box, right=3.5cm of core] (neurite) {Neuriteness\\(single scale)};
+		
+		\draw[arrow] (core) -- (engine);
+		\draw[arrow] (core) -- (neurite);
+		
+	\end{tikzpicture}
+\end{document}

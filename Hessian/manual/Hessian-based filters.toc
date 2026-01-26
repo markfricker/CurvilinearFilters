@@ -1,0 +1,27 @@
+\contentsline {section}{Summary}{4}{section*.2}%
+\contentsline {section}{end}{4}{section*.3}%
+\contentsline {section}{Introduction}{4}{section*.4}%
+\contentsline {section}{Mathematical Background}{4}{section*.5}%
+\contentsline {subsection}{The Hessian Matrix}{4}{subsection*.6}%
+\contentsline {subsection}{Eigenvalues and Local Geometry}{5}{subsection*.7}%
+\contentsline {section}{Multiscale Hessian-Based Filters}{5}{section*.8}%
+\contentsline {subsection}{Vesselness and Ridge Filters}{5}{subsection*.9}%
+\contentsline {subsection}{Design Constraints}{5}{subsection*.10}%
+\contentsline {section}{Neuriteness (Meijering et al.)}{6}{section*.11}%
+\contentsline {subsection}{Modified Hessian}{6}{subsection*.12}%
+\contentsline {subsection}{Neuriteness Measure}{6}{subsection*.13}%
+\contentsline {subsection}{Key Properties}{6}{subsection*.14}%
+\contentsline {section}{Software Architecture}{6}{section*.15}%
+\contentsline {subsection}{Core Functions}{6}{subsection*.16}%
+\contentsline {subsection}{Multiscale Engine}{7}{subsection*.17}%
+\contentsline {subsection}{Neuriteness}{7}{subsection*.18}%
+\contentsline {section}{Test Suite}{7}{section*.19}%
+\contentsline {section}{Synthetic Benchmark Phantom}{7}{section*.20}%
+\contentsline {section}{Demos and Figure Generation}{9}{section*.21}%
+\contentsline {subsection}{Demo Script}{9}{subsection*.22}%
+\contentsline {section}{Repository Layout and Build Instructions}{9}{section*.23}%
+\contentsline {subsection}{Folder Structure}{9}{subsection*.24}%
+\contentsline {subsection}{Building the Manual}{9}{subsection*.25}%
+\contentsline {section}{Test Suite}{10}{section*.26}%
+\contentsline {chapter}{Bibliography}{11}{chapter*.27}%
+\contentsfinish 
