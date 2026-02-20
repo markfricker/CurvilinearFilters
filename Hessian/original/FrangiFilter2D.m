@@ -65,7 +65,7 @@ for i = 1:length(sigmas)
     end
     
     % Make 2D hessian
-    [Dxx,Dxy,Dyy] = Hessian2D(I,sigmas(i));
+    [Dxx,Dxy,Dyy] = applyHessian2D(I,sigmas(i));
        
     % Correct for scale
     Dxx = (sigmas(i)^2)*Dxx;
