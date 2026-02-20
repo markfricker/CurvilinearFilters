@@ -1,7 +1,7 @@
 % demo_generate_figures.m
 % Generates all filter response figures from the complex phantom
 
-addpath('../core','../engine','../neuriteness','../tests/utils');
+%addpath('../core','../engine','../neuriteness','../tests/utils');
 
 % -------------------------------------------------------------------------
 % Load phantom (PNG, not PDF)

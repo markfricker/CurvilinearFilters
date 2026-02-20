@@ -9,7 +9,7 @@ function demo_generate_composite_figure()
 %
 % Output: manual/figures/complex_composite.pdf
 
-addpath('../core','../engine','../neuriteness','../tests/utils');
+%addpath('../src/core','../src/engine','../src/neuriteness','../tests/utilities');
 
 % -------------------------------------------------------------------------
 % Load phantom
