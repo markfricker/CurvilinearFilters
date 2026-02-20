@@ -18,7 +18,7 @@ else
 end
 
 % Hessian
-[Dxx, Dxy, Dyy] = Hessian2D(I, sigma);
+[Dxx, Dxy, Dyy] = applyHessian2D(I, sigma);
 
 % Scale normalization (Lindeberg)
 Dxx = sigma^2 * Dxx;

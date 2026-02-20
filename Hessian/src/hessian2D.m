@@ -20,7 +20,7 @@ for k = 1:numel(sigmas)
     sigma = sigmas(k);
 
     % Hessian
-    [Dxx,Dxy,Dyy] = Hessian2D(I, sigma);
+    [Dxx,Dxy,Dyy] = applyHessian2D(I, sigma);
     Dxx = sigma^2 * Dxx;
     Dxy = sigma^2 * Dxy;
     Dyy = sigma^2 * Dyy;
