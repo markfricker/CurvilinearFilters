@@ -140,7 +140,7 @@ for i = 1:nScales
     end
 
     % Make 2D Hessian
-    [Dxx, Dxy, Dyy] = Hessian2D(I, sigmas(i));
+    [Dxx, Dxy, Dyy] = applyHessian2D(I, sigmas(i));
 
     % Correct for scale
     s2 = sigma2(i);

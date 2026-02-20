@@ -10,7 +10,7 @@ energy = zeros(size(sigmasAll),'single');
 for k = 1:numel(sigmasAll)
     s = sigmasAll(k);
 
-    [Dxx,~,Dyy] = Hessian2D(I, s);
+    [Dxx,~,Dyy] = applyHessian2D(I, s);
     curv = abs(s^2 * Dxx) + abs(s^2 * Dyy);
 
     energy(k) = mean(curv(:));

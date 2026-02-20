@@ -22,7 +22,7 @@ for k = 1:numel(filters)
         'FilterType',filters{k},'Sigmas',sigmas);
 
     % Recompute eigenvalues at a representative scale
-    [Dxx,Dxy,Dyy] = Hessian2D(single(I), 2);
+    [Dxx,Dxy,Dyy] = applyHessian2D(single(I), 2);
     [l1,l2,~,~]   = eig2image(Dxx,Dxy,Dyy);
     C = hessianConfidence(R,l1,l2);
     subplot(2,3,k+1);

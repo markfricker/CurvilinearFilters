@@ -10,4 +10,3 @@ I = generateTestLineImage(128,0,2);
 
 verifyGreaterThan(testCase,max(V1(:)),5*max(V2(:)));
 end
-d
