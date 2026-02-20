@@ -5,7 +5,7 @@ end
 function testEigenOrdering(testCase)
 
 I = generateTestBlobImage(64,5);
-[Dxx,Dxy,Dyy] = Hessian2D(I,2);
+[Dxx,Dxy,Dyy] = applyHessian2D(I,2);
 [L1,L2,Vx,Vy] = eig2image(Dxx,Dxy,Dyy);
 
 % --- Eigenvalue ordering: pointwise ---
