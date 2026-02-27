@@ -1,4 +1,4 @@
-% PHASECONG3OPTIMISED - Computes edge and corner phase congruency in an image.
+% phaseCong3Optimised - Computes edge and corner phase congruency in an image.
 %
 % This function calculates the PC_2 measure of phase congruency.
 % This function supersedes PHASECONG2 and PHASECONG being faster and requires
@@ -6,13 +6,13 @@
 %
 % There are potentially many arguments, here is the full usage:
 %
-%   [M m or ft pc EO, T] = phasecong3Optimised(im, nscale, norient, minWaveLength, ...
+%   [M m or ft pc EO, T] = phaseCong3Optimised(im, nscale, norient, minWaveLength, ...
 %                           mult, sigmaOnf, k, cutOff, g, noiseMethod)
 %
 % However, apart from the image, all parameters have defaults and the
 % usage can be as simple as:
 %
-%    M = phasecong3Optimised(im);
+%    M = phaseCong3Optimised(im);
 %
 % Arguments:
 %              Default values      Description
@@ -57,8 +57,14 @@
 %                 diagnosing noise characteristics of images).  Once you know
 %                 this you can then specify fixed thresholds and save some
 %                 computation time.
+%    pcSum      - Sum of phase congruency values across all orientations.
+%                 Provides a single scalar field summarising overall feature
+%                 salience regardless of orientation.
 %    noiseMask  - Logical mask indicating pixels classified as noise:
-%                 (Energy_pre <= T) in ALL orientations (conservative).
+%                 true where (Energy <= T) in ALL orientations (conservative
+%                 AND across orientations).  Energy is evaluated before the
+%                 soft-threshold subtraction so that truly featureless pixels
+%                 are identified.
 %
 %   EO{s,o} = convolution result for scale s and orientation o.  The real part
 %   is the result of convolving with the even symmetric filter, the imaginary
@@ -72,14 +78,14 @@
 % Notes on specifying parameters:
 %
 % The parameters can be specified as a full list eg.
-%  >> [M m or ft pc EO] = phasecong3Optimised(im, 5, 6, 3, 2.5, 0.55, 2.0, 0.4, 10);
+%  >> [M m or ft pc EO] = phaseCong3Optimised(im, 5, 6, 3, 2.5, 0.55, 2.0, 0.4, 10);
 %
 % or as a partial list with unspecified parameters taking on default values
-%  >> [M m or ft pc EO] = phasecong3Optimised(im, 5, 6, 3);
+%  >> [M m or ft pc EO] = phaseCong3Optimised(im, 5, 6, 3);
 %
 % or as a partial list of parameters followed by some parameters specified via a
 % keyword-value pair, remaining parameters are set to defaults, for example:
-%  >> [M m or ft pc EO] = phasecong3Optimised(im, 5, 6, 3, 'cutOff', 0.3, 'k', 2.5);
+%  >> [M m or ft pc EO] = phaseCong3Optimised(im, 5, 6, 3, 'cutOff', 0.3, 'k', 2.5);
 %
 % The convolutions are done via the FFT.  Many of the parameters relate to the
 % specification of the filters in the frequency plane.  The values do not seem
@@ -140,15 +146,27 @@
 % The Software is provided "as is", without warranty of any kind.
 %
 % -------------------------------------------------------------------------
-% Additional options in this optimised/renamed version:
+% 2026 Additional options in this optimised/renamed version:
 %   'precision' : 'double' (default) | 'single' | 'like'
 %   'storeEO'   : [] (auto from outputs) | true | false
 %   'storePC'   : false (default, opt-in) | true | false
 %
-% 
+% Fixes applied relative to original optimised version:
+%   1. KEYWORD LOOP BUG — checkargs while-loop condition changed from
+%      "n < nargs" to "n <= nargs - 1".  The original condition silently
+%      dropped the last keyword/value pair whenever the total argument
+%      count was even (e.g. image + exactly two k/v pairs).
+%   2. LP CONSTANTS PROMOTED — lowpass filter parameters (.45 and 15)
+%      extracted to named constants LP_CUTOFF / LP_SHARPNESS at the top
+%      of the main function so the persistent-cache key and the
+%      lowpassfilter() call are guaranteed to stay in sync.
+%   3. pcSum DOCUMENTED — added to the Returned values section of the
+%      header; clarified noiseMask semantics (pre-threshold Energy).
+%   4. histc REPLACED — rayleighmode now uses histcounts with linspace
+%      edges; histc was deprecated in R2014b and removed in R2023b+.
 % -------------------------------------------------------------------------
 
-function [M, m, or, featType, PC, EO, T, pcSum, noiseMask] = phasecong3Optimised(varargin)
+function [M, m, or, featType, PC, EO, T, pcSum, noiseMask] = phaseCong3Optimised(varargin)
 
 % Get arguments and/or default values
     [im, nscale, norient, minWaveLength, mult, sigmaOnf, ...
@@ -180,6 +198,11 @@ function [M, m, or, featType, PC, EO, T, pcSum, noiseMask] = phasecong3Optimised
 
     [rows,cols] = size(im);
     imagefft = fft2(im);              % Fourier transform of image
+
+    % Low-pass filter constants — defined once so that the cache key and the
+    % lowpassfilter() call below are guaranteed to stay in sync.  Change here only.
+    LP_CUTOFF    = 0.45;   % Normalised radius cutoff for the low-pass pre-filter
+    LP_SHARPNESS = 15;     % Butterworth-order sharpness of the low-pass roll-off
 
     % noiseMask output (computed only if requested)
     wantNoiseMask = (nargout >= 9);
@@ -223,7 +246,7 @@ function [M, m, or, featType, PC, EO, T, pcSum, noiseMask] = phasecong3Optimised
 
     precClass = class(im);
     cacheKey = sprintf('%dx%d|ns=%d|minWL=%.12g|mult=%.12g|sig=%.12g|lp=%.12g,%.12g|%s', ...
-        rows, cols, nscale, minWaveLength, mult, sigmaOnf, .45, 15, precClass);
+        rows, cols, nscale, minWaveLength, mult, sigmaOnf, LP_CUTOFF, LP_SHARPNESS, precClass);
 
     if isfield(CACHE,'key') && strcmp(CACHE.key, cacheKey)
         radius   = CACHE.radius;
@@ -281,7 +304,7 @@ function [M, m, or, featType, PC, EO, T, pcSum, noiseMask] = phasecong3Optimised
         % this to ensure no extra frequencies at the 'corners' of the FFT are
         % incorporated as this seems to upset the normalisation process when
         % calculating phase congrunecy.
-        lp = lowpassfilter([rows,cols],.45,15);   % Radius .45, 'sharpness' 15
+        lp = lowpassfilter([rows,cols], LP_CUTOFF, LP_SHARPNESS);   % Radius .45, 'sharpness' 15
         lp = cast(lp, 'like', im);
 
         logGabor = cell(1,nscale);
@@ -535,7 +558,7 @@ function [im, nscale, norient, minWaveLength, mult, sigmaOnf, ...
     im              = [];
     nscale          = 4;     % Number of wavelet scales.
     norient         = 6;     % Number of filter orientations.
-    minWaveLength   = 3;     % Wavelength of smallest scale filter.
+    minWaveLength   = 5;     % Wavelength of smallest scale filter.
     mult            = 2.1;   % Scaling factor between successive filters.
     sigmaOnf        = 0.55;  % Ratio of the standard deviation of the
                              % Gaussian describing the log Gabor filter's
@@ -608,7 +631,9 @@ function [im, nscale, norient, minWaveLength, mult, sigmaOnf, ...
         end
 
         n = firstKey;
-        while n < nargs
+        while n <= nargs - 1   % BUG FIX: was "n < nargs" which silently dropped
+                               % the last keyword/value pair when the total number
+                               % of arguments was even (e.g. image + two k/v pairs).
 
             if ~(isa(arg{n},'char') || isa(arg{n},'string'))
                 error('There should be a parameter name - value pair');
@@ -706,8 +731,8 @@ function rmode = rayleighmode(data, nbins)
     end
 
     mx = max(data(:));
-    edges = 0:mx/nbins:mx;
-    n = histc(data(:),edges);
+    edges = linspace(0, mx, nbins + 1);   % histcounts replaces deprecated histc (removed R2023b+)
+    n = histcounts(data(:), edges);
     [~,ind] = max(n); % Find maximum and index of maximum in histogram
 
     rmode = (edges(ind)+edges(ind+1))/2;

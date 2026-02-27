@@ -1,5 +1,5 @@
-function [S,Rbeta,tensor,Vx,Vy,mxc] = MDFTensor(qk,beta,c,precision)
-%% MDFTensor
+function [S,Rbeta,tensor,Vx,Vy,mxc] = TensorOptimised(qk,beta,c,precision)
+%% TensorOptimised
 % Tensor-based vesselness layered on phase congruency
 %
 % Default precision: SINGLE
