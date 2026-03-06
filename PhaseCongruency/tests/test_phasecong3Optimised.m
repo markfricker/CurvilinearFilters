@@ -1,20 +1,23 @@
-function tests = test_phasecong3Optimised
-% Unit tests for phasecong3Optimised.m
+function tests = test_phaseCong3Optimised
+% Unit tests for phaseCong3Optimised.m
 tests = functiontests(localfunctions);
 end
 
 % -------------------------------------------------------------------------
 function setupOnce(testCase) %#ok<INUSD>
-% Ensure function is on path
-assert(exist('phasecong3Optimised','file') == 2, ...
-    'phasecong3Optimised.m not found on the MATLAB path.');
+thisDir = fileparts(mfilename('fullpath'));
+addpath(fullfile(thisDir,'..','src'));
+addpath(fullfile(thisDir,'..','utils'));
+addpath(fullfile(thisDir,'..','..','Helper functions'));
+assert(exist('phaseCong3Optimised','file') == 2, ...
+    'phaseCong3Optimised.m not found on the MATLAB path.');
 end
 
 % -------------------------------------------------------------------------
 function testBasicOutputsAndRanges(testCase)
 
 im = makeReticulateTestImage(256, 256, 123); % deterministic synthetic
-[M,m,ori,ft,PC,EO,T,pcSum,noiseMask] = phasecong3Optimised( ...
+[M,m,ori,ft,PC,EO,T,pcSum,noiseMask] = phaseCong3Optimised( ...
     im, 'precision','double', 'storeEO', true, 'storePC', true);
 
 tol = 1e-8;  % tolerance for numerical roundoff (can be tightened if desired)
@@ -75,7 +78,7 @@ im = makeReticulateTestImage(128, 128, 1);
 
 % By default storePC=false (opt-in), EO auto by nargout.
 % Request PC/EO in outputs but do not opt in storePC -> PC should be [].
-[~,~,~,~,PC,EO] = phasecong3Optimised(im, 'precision','double');
+[~,~,~,~,PC,EO] = phaseCong3Optimised(im, 'precision','double');
 
 verifyTrue(testCase, isempty(PC), 'PC should be empty by default (storePC=false).');
 
@@ -83,12 +86,12 @@ verifyTrue(testCase, isempty(PC), 'PC should be empty by default (storePC=false)
 verifyTrue(testCase, iscell(EO), 'EO should be a cell when requested as output.');
 
 % Now explicitly force no EO
-[~,~,~,~,PC2,EO2] = phasecong3Optimised(im, 'precision','double', 'storeEO', false);
+[~,~,~,~,PC2,EO2] = phaseCong3Optimised(im, 'precision','double', 'storeEO', false);
 verifyTrue(testCase, isempty(EO2), 'EO should be [] when storeEO=false.');
 verifyTrue(testCase, isempty(PC2), 'PC should still be [] by default.');
 
 % Explicitly opt-in PC
-[~,~,~,~,PC3] = phasecong3Optimised(im, 'precision','double', 'storePC', true);
+[~,~,~,~,PC3] = phaseCong3Optimised(im, 'precision','double', 'storePC', true);
 verifyTrue(testCase, iscell(PC3), 'PC should be a cell when storePC=true.');
 end
 
@@ -97,8 +100,8 @@ function testDeterminism(testCase)
 
 im = makeReticulateTestImage(192, 192, 77);
 
-A = phasecong3Optimised(im, 'precision','double', 'storeEO', false, 'storePC', false);
-B = phasecong3Optimised(im, 'precision','double', 'storeEO', false, 'storePC', false);
+A = phaseCong3Optimised(im, 'precision','double', 'storeEO', false, 'storePC', false);
+B = phaseCong3Optimised(im, 'precision','double', 'storeEO', false, 'storePC', false);
 
 verifyEqual(testCase, A, B, 'AbsTol', 0, ...
     'Outputs should be bitwise identical for deterministic inputs/settings.');
@@ -110,10 +113,10 @@ function testSingleVsDoubleClose(testCase)
 imD = makeReticulateTestImage(192, 192, 9);          % double
 imS = single(imD);                                   % single
 
-[M1,m1,or1,ft1,~,~,T1,pcSum1] = phasecong3Optimised( ...
+[M1,m1,or1,ft1,~,~,T1,pcSum1] = phaseCong3Optimised( ...
     imD, 'precision','double', 'storeEO', false, 'storePC', false);
 
-[M2,m2,or2,ft2,~,~,T2,pcSum2] = phasecong3Optimised( ...
+[M2,m2,or2,ft2,~,~,T2,pcSum2] = phaseCong3Optimised( ...
     imS, 'precision','single', 'storeEO', false, 'storePC', false);
 
 % Expect close, not identical (single precision)
@@ -136,7 +139,7 @@ function testNoiseMaskSanity(testCase)
 im = makeReticulateTestImage(128, 128, 101);
 
 % Use fixed threshold so T is known and noiseMask uses Energy_pre <= T.
-[~,~,~,~,~,~,T,~,noiseMask] = phasecong3Optimised( ...
+[~,~,~,~,~,~,T,~,noiseMask] = phaseCong3Optimised( ...
     im, 'precision','double', 'noiseMethod', 0.2, 'storeEO', false, 'storePC', false);
 
 verifyTrue(testCase, isscalar(T));
@@ -145,7 +148,7 @@ verifyGreaterThanOrEqual(testCase, nnz(noiseMask), 0);
 verifyLessThanOrEqual(testCase, nnz(noiseMask), numel(noiseMask));
 
 % If threshold is very low, very few pixels should be classified as noise
-[~,~,~,~,~,~,~,~,noiseMaskLow] = phasecong3Optimised( ...
+[~,~,~,~,~,~,~,~,noiseMaskLow] = phaseCong3Optimised( ...
     im, 'precision','double', 'noiseMethod', 0.0, 'storeEO', false, 'storePC', false);
 
 verifyLessThanOrEqual(testCase, nnz(noiseMaskLow), nnz(noiseMask) + 1); % monotonic-ish sanity
@@ -157,16 +160,16 @@ function testPersistentCacheLoopUsage(testCase)
 im = makeReticulateTestImage(256, 256, 202);
 
 % Call repeatedly; should not error; outputs should stay identical.
-ref = phasecong3Optimised(im, 'precision','double', 'storeEO', false, 'storePC', false);
+ref = phaseCong3Optimised(im, 'precision','double', 'storeEO', false, 'storePC', false);
 
 for i = 1:10 %#ok<NASGU>
-    out = phasecong3Optimised(im, 'precision','double', 'storeEO', false, 'storePC', false);
+    out = phaseCong3Optimised(im, 'precision','double', 'storeEO', false, 'storePC', false);
     verifyEqual(testCase, out, ref, 'AbsTol', 0);
 end
 
 % Optional: clear persistent cache and verify still works and same output
-clear phasecong3Optimised
-out2 = phasecong3Optimised(im, 'precision','double', 'storeEO', false, 'storePC', false);
+clear phaseCong3Optimised
+out2 = phaseCong3Optimised(im, 'precision','double', 'storeEO', false, 'storePC', false);
 verifyEqual(testCase, out2, ref, 'AbsTol', 0);
 
 end
