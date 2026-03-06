@@ -6,7 +6,10 @@
 % -------------------------------------------------------------------------
 % Load phantom (PNG, not PDF)
 % -------------------------------------------------------------------------
-I = im2double(imread('../manual/figures/complex_phantom.png'));
+thisDir = fileparts(mfilename('fullpath'));
+figDir  = fullfile(thisDir,'..','..','manual','figures');
+
+I = im2double(imread(fullfile(figDir,'complex_phantom.png')));
 
 % -------------------------------------------------------------------------
 % Vesselness
@@ -18,7 +21,7 @@ I = im2double(imread('../manual/figures/complex_phantom.png'));
 
 figure; imagesc(V); axis image off; colormap hot;
 title('Vesselness response');
-print('-dpdf','../manual/figures/complex_vesselness.pdf');
+print('-dpdf',fullfile(figDir,'complex_vesselness.pdf'));
 
 % -------------------------------------------------------------------------
 % Blobness
@@ -29,7 +32,7 @@ print('-dpdf','../manual/figures/complex_vesselness.pdf');
 
 figure; imagesc(B); axis image off; colormap hot;
 title('Blobness response');
-print('-dpdf','../manual/figures/complex_blobness.pdf');
+print('-dpdf',fullfile(figDir,'complex_blobness.pdf'));
 
 % -------------------------------------------------------------------------
 % Plateness
@@ -41,7 +44,7 @@ print('-dpdf','../manual/figures/complex_blobness.pdf');
 
 figure; imagesc(P); axis image off; colormap hot;
 title('Plateness response');
-print('-dpdf','../manual/figures/complex_plateness.pdf');
+print('-dpdf',fullfile(figDir,'complex_plateness.pdf'));
 
 % -------------------------------------------------------------------------
 % Neuriteness (single scale)
@@ -50,4 +53,4 @@ print('-dpdf','../manual/figures/complex_plateness.pdf');
 
 figure; imagesc(N); axis image off; colormap hot;
 title('Neuriteness response');
-print('-dpdf','../manual/figures/complex_neuriteness.pdf');
+print('-dpdf',fullfile(figDir,'complex_neuriteness.pdf'));

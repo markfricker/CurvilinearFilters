@@ -1,17 +1,22 @@
-% demo_allFilters.m
-% Compare all Hessian-based filters
+% demo_autoLearn.m
+% Demonstrate automatic scale selection on the shared reticulate test image.
 
-clear; clc;
+clear; close all; clc;
 
-I = generateTestImage(256);
+thisDir = fileparts(mfilename('fullpath'));
+addpath(fullfile(thisDir,'..','src'));
+addpath(fullfile(thisDir,'..','src','engine'));
+addpath(fullfile(thisDir,'..','src','utils'));
+addpath(fullfile(thisDir,'..','..','Helper functions'));
+
+I = im2single(makeReticulateTestImage(256, 256, 42));
 
 filters = {'vesselness','ridge','blob','plate'};
 titles  = {'Vesselness','Ridge','Blobness','Plateness'};
 
+sigmas = autoLearnHessianScales(I, 0.5, 8, 0.5);
 
-sigmas = autoLearnHessianScales(I,0.5,8,0.5);
-
-figure('Name','Hessian Filter Comparison','Position',[100 100 1200 500]);
+figure('Name','Hessian Filter Comparison (Auto-Scales)','Position',[100 100 1200 500]);
 
 subplot(2,3,1);
 imshow(I,[]);
@@ -29,4 +34,3 @@ for k = 1:numel(filters)
     imshowpair(R,C,'montage');
     title(titles{k});
 end
-

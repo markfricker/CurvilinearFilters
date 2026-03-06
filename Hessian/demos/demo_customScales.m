@@ -1,9 +1,15 @@
 % demo_customScales.m
-% Effect of sigma range on Hessian response
+% Effect of sigma range on Hessian vesselness response.
+% Uses the shared reticulate test image.
 
-clear; clc;
+clear; close all; clc;
 
-I = generateTestImage(256);
+thisDir = fileparts(mfilename('fullpath'));
+addpath(fullfile(thisDir,'..','src'));
+addpath(fullfile(thisDir,'..','src','engine'));
+addpath(fullfile(thisDir,'..','..','Helper functions'));
+
+I = im2single(makeReticulateTestImage(256, 256, 42));
 
 sigmaSets = {
     0.5:0.5:2,   'Small scales';

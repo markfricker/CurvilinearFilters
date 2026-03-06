@@ -1,11 +1,19 @@
 % DEMO_MFATENTROPYFRACTIONAL  Optional MFAT modifiers
+% Uses the shared reticulate test image.
 
 clear; close all;
 
-I = im2single(imread('example.png'));
-if size(I,3) > 1
-    I = rgb2gray(I);
-end
+thisDir = fileparts(mfilename('fullpath'));
+addpath(fullfile(thisDir,'..','src','drivers'));
+addpath(fullfile(thisDir,'..','src','core'));
+addpath(fullfile(thisDir,'..','src','responses'));
+addpath(fullfile(thisDir,'..','src','modifiers'));
+addpath(fullfile(thisDir,'..','src','utils'));
+addpath(fullfile(thisDir,'..','config'));
+addpath(fullfile(thisDir,'..','..','Helper functions'));
+
+% --- shared test image ---
+I = im2single(makeReticulateTestImage(256, 256, 42));
 
 sigmas = 0.5:0.5:3;
 
@@ -30,7 +38,7 @@ R_ent = mfatEntropyWeight(R_lambda, faStack, ...
 R_frac = mfatFractional(R_lambda, 'alpha',0.7);
 
 % --- display ---
-figure;
+figure('Color','w');
 subplot(1,3,1); imshow(R_lambda,[]); title('MFAT-\lambda');
 subplot(1,3,2); imshow(R_ent,[]);    title('Entropy-weighted');
 subplot(1,3,3); imshow(R_frac,[]);   title('Fractional (\alpha=0.7)');

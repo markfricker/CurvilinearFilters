@@ -9,12 +9,13 @@ function demo_generate_composite_figure()
 %
 % Output: manual/figures/complex_composite.pdf
 
-%addpath('../src/core','../src/engine','../src/neuriteness','../tests/utilities');
+thisDir = fileparts(mfilename('fullpath'));
+figDir  = fullfile(thisDir,'..','..','manual','figures');
 
 % -------------------------------------------------------------------------
 % Load phantom
 % -------------------------------------------------------------------------
-I = im2double(imread('../manual/figures/complex_phantom.png'));
+I = im2double(imread(fullfile(figDir,'complex_phantom.png')));
 
 % -------------------------------------------------------------------------
 % Compute responses
@@ -75,5 +76,5 @@ axis off;
 % Save composite figure (fit to page)
 % -------------------------------------------------------------------------
 set(gcf,'PaperPositionMode','auto');
-print('-dpdf','-bestfit','../manual/figures/complex_composite.pdf');
+print('-dpdf','-bestfit',fullfile(figDir,'complex_composite.pdf'));
 close;
