@@ -77,7 +77,7 @@ function R = nERdyEnhance(I, params)
 %   p.threshold = 0.5;
 %   R = nERdyEnhance(I, p);
 %
-% See also: hessian2DFilters, neuriteness2D, cellposeEnhance
+% See also: hessian2DFilters, neuriteness2D, cellposeSegment
 
 % --- defaults ---------------------------------------------------------------
 if nargin < 2, params = struct(); end
