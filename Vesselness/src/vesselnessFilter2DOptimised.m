@@ -65,21 +65,6 @@ else
     end
 end
 
-% % -------------------------------------------------------------
-% % Align naming with MFAT-style options (backward compatible)
-% % -------------------------------------------------------------
-% if isfield(options,'SigmaMin') && isfield(options,'SigmaMax')
-%     options.FrangiScaleRange = [options.SigmaMin options.SigmaMax];
-% end
-% 
-% if isfield(options,'SigmaStep')
-%     options.FrangiScaleRatio = options.SigmaStep;
-% end
-% 
-% if isfield(options,'BlackWhite')
-%     options.WhiteOnDark = ~options.BlackWhite;
-% end
-
 % -------------------------------------------------------------
 % Precision handling
 % -------------------------------------------------------------

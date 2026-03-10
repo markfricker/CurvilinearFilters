@@ -35,3 +35,10 @@ codegen/
 # buildtool cache folder
 .buildtool/
 
+
+# LaTeX build artefacts (manual root level)
+manual/*.aux
+manual/*.log
+manual/*.out
+manual/*.synctex.gz
+manual/*.toc
