@@ -99,11 +99,15 @@ sigmas = options.FrangiScaleRange(1): ...
          options.FrangiScaleRatio: ...
          options.FrangiScaleRange(2);
 
-sigmas = sort(sigmas,'ascend')
+sigmas  = sort(sigmas, 'ascend');   % internal: precomputed denominators below
 nScales = numel(sigmas);
 
-beta = 2 * options.FrangiBetaOne^2
-c    = 2 * options.FrangiBetaTwo^2
+% beta_internal = 2*FrangiBetaOne^2  and  c_internal = 2*FrangiBetaTwo^2
+% are precomputed denominators so the filter kernel is  exp(-Rb/beta) * (1 - exp(-S2/c))
+% which is equivalent to the Frangi formula with beta_paper = FrangiBetaOne
+% and c_paper = FrangiBetaTwo.
+beta = 2 * options.FrangiBetaOne^2;
+c    = 2 * options.FrangiBetaTwo^2;
 invbeta = 1 / beta;
 invc    = 1 / c;
 
