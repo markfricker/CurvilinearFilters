@@ -105,10 +105,18 @@ end
 
 % --- resolve nerdy_infer.py path -------------------------------------------
 if isempty(params.nerdyInfer)
-    scriptDir    = fileparts(mfilename('fullpath'));   % CurvilinearFilters_sandbox/nERdy/src
-    nerdyInfer   = fullfile(scriptDir, '..', '..', '..', ...
-                            'third party', 'nERdy integration', 'nerdy_infer.py');
-    nerdyInfer   = char(java.io.File(nerdyInfer).getCanonicalPath());
+    if isdeployed()
+        % In a compiled app, ctfroot points to the extracted CTF archive.
+        % nerdy_infer.py and the nERdy+ folder must be bundled alongside the
+        % executable (e.g. via mcc -a) and placed under nERdy_integration/.
+        nerdyInfer = fullfile(ctfroot, 'nERdy_integration', 'nerdy_infer.py');
+    else
+        % Development / mlapp: path is relative to this source file.
+        scriptDir  = fileparts(mfilename('fullpath'));   % CurvilinearFilters_sandbox/nERdy/src
+        nerdyInfer = fullfile(scriptDir, '..', '..', '..', ...
+                              'third party', 'nERdy integration', 'nerdy_infer.py');
+        nerdyInfer = char(java.io.File(nerdyInfer).getCanonicalPath());
+    end
 else
     nerdyInfer = params.nerdyInfer;
 end
