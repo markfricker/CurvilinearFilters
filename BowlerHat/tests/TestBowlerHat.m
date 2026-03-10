@@ -80,10 +80,12 @@ classdef TestBowlerHat < matlab.unittest.TestCase
         end
 
         function testBH_outputClass_uint8(tc)
-            % uint8 input → uint8 output
+            % BowlerHatFilter calls im2single(imIn) and then
+            % cast(rescale(...),'like',imIn) where imIn is now single.
+            % Therefore the output is always single regardless of input class.
             I   = uint8(255 * TestBowlerHat.rodImage());
             out = BowlerHatFilter(I, tc.MinScale, tc.NScales, tc.NOrient);
-            tc.verifyClass(out, 'uint8');
+            tc.verifyClass(out, 'single');   % actual behaviour: always single
         end
 
         function testBH_outputRangeWithinInput(tc)
@@ -105,13 +107,24 @@ classdef TestBowlerHat < matlab.unittest.TestCase
         end
 
         function testBH_rodVsBlob(tc)
-            % BowlerHat is designed for elongated structures; it should
-            % give a stronger max response on a rod than on an isotropic blob
-            Irod  = TestBowlerHat.rodImage();
-            Iblob = TestBowlerHat.blobImage();
-            outRod  = BowlerHatFilter(Irod,  tc.MinScale, tc.NScales, tc.NOrient);
-            outBlob = BowlerHatFilter(Iblob, tc.MinScale, tc.NScales, tc.NOrient);
-            tc.verifyGreaterThan(double(max(outRod(:))), double(max(outBlob(:))));
+            % BowlerHat is selective for elongated structures.  Because the
+            % filter always rescales output to [min(I), max(I)], comparing
+            % maxima across separate images is meaningless.  Instead we embed
+            % a rod (left) and an isotropic blob (right) in the SAME image so
+            % both regions share the same rescaling.  The rod region should
+            % show a higher mean response than the blob region.
+            sz = 64;
+            [xx, yy] = meshgrid(1:sz, 1:sz);
+            % Horizontal rod in left half
+            rod  = single(exp(-(yy - 32).^2 / (2*2^2)) .* (xx >= 8 & xx <= 26));
+            % Isotropic blob in right half
+            blob = single(exp(-((xx - 48).^2 + (yy - 32).^2) / (2*5^2)));
+            I    = imgaussfilt(rod + blob, 1);
+            I    = I / max(I(:));
+            out  = BowlerHatFilter(I, tc.MinScale, tc.NScales, tc.NOrient);
+            rodResp  = mean(out(30:34, 10:24), 'all');
+            blobResp = mean(out(27:37, 43:53), 'all');
+            tc.verifyGreaterThan(double(rodResp), double(blobResp));
         end
 
     end

@@ -28,7 +28,7 @@ addpath(fullfile(root, 'Hessian', 'src', 'engine'));
 addpath(fullfile(root, 'Hessian', 'src', 'utils'));
 addpath(fullfile(root, 'Hessian', 'src', 'neuriteness'));
 addpath(fullfile(root, 'Hessian', 'tests', 'utilities'));
-addpath(fullfile(root, 'Hessian', 'original'));   % FrangiFilter2D reference
+
 
 % MFAT
 addpath(fullfile(root, 'MFAT'));                       % parent of +mfat package
