@@ -10,12 +10,9 @@ function R = nERdyEnhance(I, params)
 %             single [0,1] internally.
 %   params  - optional struct with fields:
 %            .pythonExe   = ''          % Full path to Python executable.
-%                                       % '' = use 'python' on system PATH.
-%            .nerdyInfer  = ''          % Full path to nerdy_infer.py.
-%                                       % '' = auto-detect relative to this
-%                                       %      function file.
-%            .modelPath   = ''          % Full path to .pth weights file.
-%                                       % '' = auto-detect (default weights).
+%                                       % '' = auto-detect: checks
+%                                       %   %USERPROFILE%\venvs\nerdy first,
+%                                       %   then pyenv(), then PATH.
 %            .device      = 'auto'      % 'auto', 'cuda', or 'cpu'.
 %            .threshold   = NaN         % Fixed threshold in [0,1] for
 %                                       % binarisation.  NaN = use default
@@ -29,33 +26,36 @@ function R = nERdyEnhance(I, params)
 %             enhancers and can be used directly as a segmentation mask.
 %
 % REQUIREMENTS
-%   Python 3.9+ with the following packages installed:
+%   A Python venv at %USERPROFILE%\venvs\nerdy with:
 %     torch>=2.0.0, torchvision, scikit-image, pillow, numpy
-%   The nERdy+ source tree (with pre-trained weights) must be available on
-%   disk.  By default the function looks for:
-%     <this_file>/../../../third party/nERdy integration/nerdy_infer.py
-%   and for the model weights at:
-%     <nerdy_infer_dir>/nERdy/nERdy+/NNet_groupy_p4m_v2_VecAdam.pth
+%
+%   To create the venv (run once in PowerShell):
+%     python -m venv $env:USERPROFILE\venvs\nerdy
+%     $env:USERPROFILE\venvs\nerdy\Scripts\pip install torch torchvision scikit-image pillow numpy
+%   For CUDA (adjust cu124 to match your driver):
+%     $env:USERPROFILE\venvs\nerdy\Scripts\pip install torch torchvision `
+%         --index-url https://download.pytorch.org/whl/cu124
+%
+%   The nERdy+ source tree (model.py + NNet_groupy_p4m_v2_VecAdam.pth) must
+%   be in the nERdy/nERdy+/ subfolder alongside nerdyServer.py.
 %
 % OVERVIEW
-%   Segmentation uses the D4-equivariant encoder-decoder (D4nERdy) from the
-%   nERdy+ paper (Samudre et al., 2024, Nature Communications Biology).
-%   The network was trained on confocal/STED ER fluorescence images and
-%   outperforms classical filters for tubule detection.
+%   Uses a persistent nERdy+ server (nerdyServer.py) that loads the model
+%   once per MATLAB session, then handles all requests via temp files.
+%   The server is started automatically on the first call via the Windows
+%   Task Scheduler (same mechanism as cellposeServer.py).
 %
-%   The function writes the input slice to a temporary TIFF file, calls
-%   nerdy_infer.py as a subprocess (avoiding MATLAB pyenv dependency), reads
-%   the resulting binary mask, and returns it as a single-precision [0,1]
-%   image.
+%   This avoids the ~2–5 s model-load overhead that the old subprocess
+%   approach incurred on every frame.
 %
 % NOTES
 %   - For 3-D stacks, call funcEnhanceRun which iterates over Z/T slices.
 %   - GPU inference (params.device = 'cuda') is ~5× faster than CPU for
-%     512×512 images on a modern laptop GPU.
-%   - The first call per session incurs model-loading overhead (~2 s GPU,
-%     ~5 s CPU for the 1.5 M-parameter D4nERdy network).
-%   - If the subprocess fails, the function throws an informative error
-%     that includes the Python stderr output for easy debugging.
+%     512×512 images.  The server defaults to CPU (safe in Task Scheduler);
+%     set params.device = 'cuda' to switch per request.
+%   - The server writes a ready file after model load, so MATLAB waits for
+%     the full ~5 s startup on the first call, not just the PID file.
+%   - Check %TEMP%\nerdy_work\server_startup.log if the server fails to start.
 %
 % REFERENCES
 %   Samudre A, Gao G, Cardoen B, Joshi B, Nabi IR, Hamarneh G (2025)
@@ -65,15 +65,9 @@ function R = nERdyEnhance(I, params)
 %   GitHub: https://github.com/NanoscopyAI/nERdy
 %
 % EXAMPLE
-%   % Basic ER segmentation with GPU auto-selection
 %   R = nERdyEnhance(I);
 %
-%   % Force CPU, custom weights
-%   p.device    = 'cpu';
-%   p.modelPath = 'C:\mymodels\nERdy_finetuned.pth';
-%   R = nERdyEnhance(I, p);
-%
-%   % Fixed probability threshold instead of Otsu
+%   p.device    = 'cuda';
 %   p.threshold = 0.5;
 %   R = nERdyEnhance(I, p);
 %
@@ -82,8 +76,6 @@ function R = nERdyEnhance(I, params)
 % --- defaults ---------------------------------------------------------------
 if nargin < 2, params = struct(); end
 if ~isfield(params, 'pythonExe'),  params.pythonExe  = '';     end
-if ~isfield(params, 'nerdyInfer'), params.nerdyInfer = '';     end
-if ~isfield(params, 'modelPath'),  params.modelPath  = '';     end
 if ~isfield(params, 'device'),     params.device     = 'auto'; end
 if ~isfield(params, 'threshold'),  params.threshold  = NaN;   end
 
@@ -96,110 +88,181 @@ end
 
 I = im2single(I);
 
-% --- resolve Python executable ----------------------------------------------
-if isempty(params.pythonExe)
-    pyExe = nerdyFindPython();
-else
-    pyExe = params.pythonExe;
+% --- run via persistent server ----------------------------------------------
+R = nerdyRunViaServer(I, params);
 end
 
-% --- resolve nerdy_infer.py path -------------------------------------------
-if isempty(params.nerdyInfer)
-    if isdeployed()
-        % In a compiled app, ctfroot points to the extracted CTF archive.
-        % nerdy_infer.py and the nERdy+ folder must be bundled alongside the
-        % executable (e.g. via mcc -a) and placed under nERdy_integration/.
-        nerdyInfer = fullfile(ctfroot, 'nERdy_integration', 'nerdy_infer.py');
-    else
-        % Development / mlapp: path is relative to this source file.
-        scriptDir  = fileparts(mfilename('fullpath'));   % CurvilinearFilters_sandbox/nERdy/src
-        nerdyInfer = fullfile(scriptDir, '..', '..', '..', ...
-                              'third party', 'nERdy integration', 'nerdy_infer.py');
-        nerdyInfer = char(java.io.File(nerdyInfer).getCanonicalPath());
+
+% ============================================================================
+% Server communication
+% ============================================================================
+
+function R = nerdyRunViaServer(I, params)
+
+serverScript = nerdyResolveServerScript();
+workDir      = fullfile(tempdir, 'nerdy_work');
+if ~exist(workDir, 'dir'), mkdir(workDir); end
+
+pidFile   = fullfile(workDir, 'server.pid');
+readyFile = fullfile(workDir, 'server.ready');
+
+if ~nerdyServerAlive(pidFile)
+    nerdyStartServer(params, serverScript, workDir, pidFile, readyFile);
+end
+
+% Write request (atomic: write to .tmp then rename)
+reqId   = sprintf('%s_%d', datestr(now,'yyyymmddHHMMSSFFF'), randi(99999));
+reqFile = fullfile(workDir, [reqId '.req.mat']);
+resFile = fullfile(workDir, [reqId '.res.mat']);
+errFile = fullfile(workDir, [reqId '.err']);
+
+device    = params.device;    %#ok<NASGU>
+threshold = params.threshold; %#ok<NASGU>
+tmpFile   = [reqFile '.tmp'];
+save(tmpFile, 'I', 'device', 'threshold', '-v6');
+movefile(tmpFile, reqFile);
+
+% Poll for result
+pollTimeout = 300;
+t0 = tic;
+while ~exist(resFile, 'file') && ~exist(errFile, 'file')
+    if toc(t0) > pollTimeout
+        try, delete(reqFile); catch, end
+        error('nERdyEnhance:timeout', ...
+              'nERdy+ server timed out after %d s.', pollTimeout);
     end
-else
-    nerdyInfer = params.nerdyInfer;
+    pause(0.25);
 end
-if ~isfile(nerdyInfer)
+
+if exist(errFile, 'file')
+    msg = fileread(errFile);
+    delete(errFile);
+    error('nERdyEnhance:serverError', 'nERdy+ server error:\n%s', msg);
+end
+
+result = load(resFile);
+delete(resFile);
+R = single(result.R);
+end
+
+
+function nerdyStartServer(params, serverScript, workDir, pidFile, readyFile)
+logFile   = fullfile(workDir, 'server_startup.log');
+errorFile = fullfile(workDir, 'server.error');
+
+% Remove stale files from any previous run
+for f = {readyFile, pidFile, errorFile}
+    if exist(f{1}, 'file'), delete(f{1}); end
+end
+
+pyExe = nerdyFindPython(params);
+
+taskName = 'MATLABNerdyServer';
+tr = sprintf('"%s" "%s" "%s"', pyExe, serverScript, workDir);
+system(sprintf('schtasks /Delete /TN "%s" /F > NUL 2>&1', taskName));
+createCmd = sprintf( ...
+    'schtasks /Create /F /TN "%s" /TR "%s" /SC ONCE /SD 01/01/2000 /ST 00:00', ...
+    taskName, strrep(tr, '"', '\"'));
+system(createCmd);
+system(sprintf('schtasks /Run /TN "%s"', taskName));
+
+% --- waitbar with Cancel ------------------------------------------------------
+wb = waitbar(0, 'Starting nERdy+ server...', 'Name', 'nERdy+', ...
+             'CreateCancelBtn', @(~,~) setappdata(gcbf, 'cancel', true));
+setappdata(wb, 'cancel', false);
+wbClean = onCleanup(@() nerdyCloseWaitbar(wb));
+
+% Wait for PID file (up to 60 s — covers slow Task Scheduler launch)
+t0 = tic;
+while ~nerdyServerAlive(pidFile) && toc(t0) < 60
+    if ~ishandle(wb) || getappdata(wb, 'cancel')
+        error('nERdyEnhance:cancelled', 'nERdy+ server startup cancelled.');
+    end
+    if exist(errorFile, 'file')
+        msg = fileread(errorFile);
+        error('nERdyEnhance:serverCrash', ...
+              'nERdy+ server crashed during startup:\n%s', msg);
+    end
+    waitbar(min(toc(t0)/60, 0.4), wb, 'Starting nERdy+ server...');
+    pause(0.5);
+end
+if ~nerdyServerAlive(pidFile)
+    error('nERdyEnhance:serverTimeout', ...
+          ['nERdy+ server did not start within 60 s.\n' ...
+           'Check log: %s\n' ...
+           'Or start manually from PowerShell:\n' ...
+           '  python "%s" "%s"'], logFile, serverScript, workDir);
+end
+
+% Wait for ready file (model loaded — up to 120 s for CUDA torch)
+t0 = tic;
+while ~exist(readyFile, 'file') && toc(t0) < 120
+    if ~ishandle(wb) || getappdata(wb, 'cancel')
+        error('nERdyEnhance:cancelled', 'nERdy+ server startup cancelled.');
+    end
+    if exist(errorFile, 'file')
+        msg = fileread(errorFile);
+        error('nERdyEnhance:serverCrash', ...
+              'nERdy+ server crashed during startup:\n%s', msg);
+    end
+    if ~nerdyServerAlive(pidFile)
+        msg = '';
+        if exist(logFile, 'file'), msg = fileread(logFile); end
+        error('nERdyEnhance:serverCrash', ...
+              ['nERdy+ server process died before model loaded.\n\n' ...
+               'Startup log:\n%s'], msg);
+    end
+    waitbar(0.4 + min(toc(t0)/120, 0.55), wb, 'Loading nERdy+ model...');
+    pause(0.5);
+end
+if ~exist(readyFile, 'file')
+    error('nERdyEnhance:modelTimeout', ...
+          ['nERdy+ model did not load within 120 s.\n' ...
+           'Check log: %s'], logFile);
+end
+
+waitbar(1, wb, 'nERdy+ server ready.');
+pause(0.3);
+if ishandle(wb), delete(wb); end
+end
+
+
+function nerdyCloseWaitbar(wb)
+if ishandle(wb), delete(wb); end
+end
+
+
+
+function serverScript = nerdyResolveServerScript()
+if isdeployed()
+    serverScript = fullfile(ctfroot, 'nERdy_integration', 'nerdyServer.py');
+else
+    scriptDir    = fileparts(mfilename('fullpath')); % .../nERdy/src
+    serverScript = fullfile(scriptDir, '..', '..', '..', ...
+                            'third party', 'nERdy integration', 'nerdyServer.py');
+    serverScript = char(java.io.File(serverScript).getCanonicalPath());
+end
+if ~isfile(serverScript)
     error('nERdyEnhance:notFound', ...
-          ['nerdy_infer.py not found at:\n  %s\n' ...
-           'Set params.nerdyInfer to the correct path, or ensure the\n' ...
-           'nERdy integration folder is adjacent to BlobFilters_sandbox.'], ...
-          nerdyInfer);
-end
-
-% --- write input to temp TIFF -----------------------------------------------
-tmpIn  = [tempname, '_nerdy_in.tif'];
-tmpOut = [tempname, '_nerdy_out.tif'];
-cleanupObj = onCleanup(@() nerdyCleanTmp(tmpIn, tmpOut));
-
-imwrite(uint8(I * 255), tmpIn);
-
-% --- build command ----------------------------------------------------------
-cmd = sprintf('"%s" "%s" --input "%s" --output "%s" --device %s', ...
-              pyExe, nerdyInfer, tmpIn, tmpOut, params.device);
-
-if ~isempty(params.modelPath)
-    cmd = [cmd, sprintf(' --model "%s"', params.modelPath)];
-end
-
-% Threshold: NaN or negative → use default Otsu postprocessing (no --threshold flag).
-% A non-negative finite value is an explicit override in [0,1].
-if ~isnan(params.threshold) && isfinite(params.threshold) && params.threshold >= 0
-    cmd = [cmd, sprintf(' --threshold %.6f', params.threshold)];
-end
-
-% --- run Python subprocess --------------------------------------------------
-[status, cmdout] = system(cmd);
-if status ~= 0
-    error('nERdyEnhance:pythonError', ...
-          ['nERdy+ inference failed (exit code %d).\n' ...
-           'Command: %s\n' ...
-           'Output:\n%s\n\n' ...
-           'Tip: run the command above in a terminal to diagnose. Ensure\n' ...
-           '  torch, torchvision, scikit-image, pillow are installed in\n' ...
-           '  the Python environment at: %s'], ...
-          status, cmd, cmdout, pyExe);
-end
-
-% --- read result ------------------------------------------------------------
-if ~isfile(tmpOut)
-    error('nERdyEnhance:noOutput', ...
-          ['nERdy+ did not produce an output file.\nExpected: %s\n' ...
-           'Command output:\n%s'], tmpOut, cmdout);
-end
-
-mask = imread(tmpOut);
-if ~islogical(mask) && max(mask(:)) > 1
-    R = single(mask > 0);   % binarise from uint8 0/255
-else
-    R = single(mask);
+          ['nerdyServer.py not found at:\n  %s\n' ...
+           'Ensure the nERdy integration folder is adjacent to ' ...
+           'CurvilinearFilters_sandbox.'], serverScript);
 end
 end
 
 
-% ============================================================================
-% Local helpers
-% ============================================================================
-
-function p = nerdyFindPython()
-% nerdyFindPython  Locate a Python executable suitable for nERdy+ inference.
-%
-% Search order (first found wins):
-%   1. Dedicated nERdy venv  C:\Users\<user>\venvs\nerdy\Scripts\python.exe
-%      (CUDA torch, scikit-image — created specifically for nERdy+)
-%   2. MATLAB's pyenv executable (if configured and non-empty)
-%   3. 'python' on system PATH
-
-% 1. Dedicated nerdy venv alongside the cellpose venv
+function p = nerdyFindPython(params)
+% Search order: explicit param → nerdy venv → pyenv → PATH
+if isfield(params, 'pythonExe') && ~isempty(params.pythonExe)
+    p = params.pythonExe;
+    return;
+end
 nerdyVenv = fullfile(getenv('USERPROFILE'), 'venvs', 'nerdy', ...
                      'Scripts', 'python.exe');
 if isfile(nerdyVenv)
     p = nerdyVenv;
     return;
 end
-
-% 2. MATLAB pyenv
 try
     pe = pyenv();
     if ~isempty(pe.Executable)
@@ -208,18 +271,18 @@ try
     end
 catch
 end
-
-% 3. System PATH fallback
 p = 'python';
 end
 
 
-function nerdyCleanTmp(varargin)
-% Delete temporary files, ignoring errors.
-for k = 1:nargin
-    f = varargin{k};
-    if isfile(f)
-        try, delete(f); catch, end
-    end
+function alive = nerdyServerAlive(pidFile)
+alive = false;
+if ~exist(pidFile, 'file'), return; end
+try
+    pid = str2double(strtrim(fileread(pidFile)));
+    if isnan(pid) || pid <= 0, return; end
+    [~, out] = system(sprintf('tasklist /FI "PID eq %d" /NH 2>NUL', pid));
+    alive = contains(out, num2str(pid));
+catch
 end
 end
