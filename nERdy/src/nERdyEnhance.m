@@ -164,6 +164,14 @@ createCmd = sprintf( ...
     'schtasks /Create /F /TN "%s" /TR "%s" /SC ONCE /SD 01/01/2000 /ST 00:00', ...
     taskName, strrep(tr, '"', '\"'));
 system(createCmd);
+% schtasks /Create defaults DisallowStartIfOnBatteries = TRUE which silently
+% parks the task as "Queued" on a laptop running on battery.  Flip both flags
+% off before running, matching the fix in cellposeSegment.m.
+powerCmd = sprintf(['powershell -NoProfile -Command ' ...
+    '"Set-ScheduledTask -TaskName ''%s'' -Settings ' ...
+    '(New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries ' ...
+    '-DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew)"'], taskName);
+system(powerCmd);
 system(sprintf('schtasks /Run /TN "%s"', taskName));
 
 % --- waitbar with Cancel ------------------------------------------------------
@@ -234,20 +242,36 @@ end
 
 
 function serverScript = nerdyResolveServerScript()
+% Search order:
+%   1. Deployed CTF root (matlab compiler / toolbox deploy)
+%   2. nERdy_integration/ bundled in toolbox (staging root, 3 levels up)
+%   3. dev layout: 'third party/nERdy integration/' adjacent to all sandboxes
 if isdeployed()
     serverScript = fullfile(ctfroot, 'nERdy_integration', 'nerdyServer.py');
-else
-    scriptDir    = fileparts(mfilename('fullpath')); % .../nERdy/src
-    serverScript = fullfile(scriptDir, '..', '..', '..', ...
-                            'third party', 'nERdy integration', 'nerdyServer.py');
-    serverScript = char(java.io.File(serverScript).getCanonicalPath());
+    if isfile(serverScript), return; end
 end
-if ~isfile(serverScript)
-    error('nERdyEnhance:notFound', ...
-          ['nerdyServer.py not found at:\n  %s\n' ...
-           'Ensure the nERdy integration folder is adjacent to ' ...
-           'CurvilinearFilters_sandbox.'], serverScript);
+scriptDir = fileparts(mfilename('fullpath')); % .../nERdy/src (or installed equiv.)
+% Toolbox bundle: staging/nERdy_integration/nerdyServer.py
+bundled = fullfile(scriptDir, '..', '..', '..', 'nERdy_integration', 'nerdyServer.py');
+bundled = char(java.io.File(bundled).getCanonicalPath());
+if isfile(bundled)
+    serverScript = bundled;
+    return;
 end
+% Development layout: Matlab Projects/third party/nERdy integration/nerdyServer.py
+devPath = fullfile(scriptDir, '..', '..', '..', ...
+                   'third party', 'nERdy integration', 'nerdyServer.py');
+devPath = char(java.io.File(devPath).getCanonicalPath());
+if isfile(devPath)
+    serverScript = devPath;
+    return;
+end
+error('nERdyEnhance:notFound', ...
+      ['nerdyServer.py not found.\n' ...
+       'Expected at (toolbox): %s\n' ...
+       'Expected at (dev):     %s\n' ...
+       'Run setupPythonEnvs() to configure the environments, or start the server manually.'], ...
+      bundled, devPath);
 end
 
 
