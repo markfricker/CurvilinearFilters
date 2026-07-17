@@ -5,6 +5,20 @@ function [lineMap, dirMap] = AGlineDetectorSteerableConv2( ...
 % Fast anisotropic Gaussian line detector using steerable SOAGK
 % and conv2 (datatype-safe, low memory).
 %
+% OVERVIEW
+%   Second-Order Anisotropic Gaussian Kernel (SOAGK) line detector: for
+%   each scale/orientation/anisotropy combination, a steerable bank of
+%   second-order anisotropic Gaussian derivative filters is applied via
+%   conv2; the line strength at each pixel is the difference between the
+%   maximum and minimum filter response across the bank, and the
+%   orientation of the maximising filter gives the line direction. Using
+%   anisotropic (elongated) rather than isotropic Gaussian kernels gives
+%   sharper, more noise-robust line/ridge localisation than standard
+%   Hessian-based detectors, particularly at junctions. This is a
+%   datatype-safe, lower-memory re-implementation of the steerable
+%   filterbank approach used by the legacy AGlineDetector.m (same author's
+%   original algorithm).
+%
 % Inputs
 %   im        : grayscale image [0,1]
 %   sigmas    : vector of scales
@@ -15,6 +29,12 @@ function [lineMap, dirMap] = AGlineDetectorSteerableConv2( ...
 % Outputs
 %   lineMap : line strength map
 %   dirMap  : orientation map (radians)
+%
+% REFERENCES
+%   Lopez-Molina, C., Vidal-Diez de Ulzurrun, G., Baetens, J. M., Van den
+%   Bulcke, J., & De Baets, B. (2015). Unsupervised ridge detection using
+%   second order anisotropic Gaussian kernels. Signal Processing, 116,
+%   55-67. https://doi.org/10.1016/j.sigpro.2015.03.024
 
 % ----------------------------
 % Precision handling

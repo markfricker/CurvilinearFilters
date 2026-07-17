@@ -31,6 +31,12 @@ function [outIm,whatScale,Direction] = FrangiFilter2D(I, options)
 %
 % Written by Marc Schrijver, 2/11/2001
 % Re-Written by D.Kroon University of Twente (May 2009)
+%
+% REFERENCES
+%   Frangi, A. F., Niessen, W. J., Vincken, K. L., & Viergever, M. A.
+%   (1998). Multiscale vessel enhancement filtering. In Medical Image
+%   Computing and Computer-Assisted Intervention - MICCAI'98 (pp. 130-137).
+%   Springer. https://doi.org/10.1007/BFb0056195
 
 defaultoptions = struct('FrangiScaleRange', [1 8], 'FrangiScaleRatio', 2, 'FrangiBetaOne', 0.5, 'FrangiBetaTwo', 15, 'verbose',true,'BlackWhite',true);
 

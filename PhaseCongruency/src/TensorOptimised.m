@@ -2,6 +2,46 @@ function [S,Rbeta,tensor,Vx,Vy,mxc] = TensorOptimised(qk,beta,c,precision)
 %% TensorOptimised
 % Tensor-based vesselness layered on phase congruency
 %
+% OVERVIEW
+%   Builds a 2x2 orientation tensor at each pixel by accumulating the
+%   per-orientation phase-congruency response qk (from phaseCong3Optimised/
+%   phasecong3_MDF_single) weighted by cos/sin of each sampled orientation,
+%   analogous to a structure tensor built from phase-congruency energy
+%   rather than image gradients. The tensor's analytic eigenvalues (L1,L2,
+%   |L1|<=|L2|) are then combined using a Frangi-style vesselness measure:
+%   an elongation ratio Rbeta = L1/L2 (deviation from a blob) suppressed
+%   exponentially by beta, and a tensor-energy term S2 = L1^2+L2^2
+%   (analogous to Frangi's structureness term) suppressed by an
+%   automatically-normalised scale mxc. The eigenvector of the smallest
+%   eigenvalue [Vx,Vy] gives the estimated local vessel/line direction.
+%
+% INPUTS
+%   qk        - [m,n,norient] per-orientation phase-congruency response.
+%   beta      - Elongation-sensitivity constant (Frangi-style).
+%   c         - Reserved for a fixed structureness threshold (currently
+%               S2 is auto-normalised via mxc instead; kept for interface
+%               compatibility with the Hessian-family dispatcher).
+%   precision - 'single' (default) | 'double'
+%
+% OUTPUTS
+%   S      - sqrt(S2), tensor "strength" (energy magnitude).
+%   Rbeta  - Elongation measure L1/L2.
+%   tensor - Combined vesselness response in [0,1].
+%   Vx,Vy  - Unit eigenvector (vessel direction) of the smallest eigenvalue.
+%   mxc    - Automatic scale-normalisation constant used for S2.
+%
+% REFERENCES
+%   Kovesi, P. (1999). Image features from phase congruency. Videre:
+%   Journal of Computer Vision Research, 1(3).
+%
+%   Kovesi, P. (2003). Phase congruency detects corners and edges.
+%   Proceedings of DICTA 2003, Sydney, 10-12 December.
+%
+%   Frangi, A. F., Niessen, W. J., Vincken, K. L., & Viergever, M. A.
+%   (1998). Multiscale vessel enhancement filtering. In Medical Image
+%   Computing and Computer-Assisted Intervention - MICCAI'98 (pp. 130-137).
+%   Springer. https://doi.org/10.1007/BFb0056195
+%
 % Default precision: SINGLE
 %
 % Optional:
