@@ -27,6 +27,19 @@ function [lineMap, dirMap] = steerGaussEnhance(im, sigmas, thetas, precision)
 % Dependencies
 %   steerGaussFilterOrder2  (MycNetAnalysis/src/fcn/external/ must be on path)
 %
+% POLARITY (fixed 2026-09): steerGaussFilterOrder2 convolves with a
+% negative-at-center 2nd-derivative-of-Gaussian kernel, so it returns a
+% NEGATIVE response at bright ridges and a positive response at dark
+% ridges -- the opposite of what an earlier version of this file's own
+% comment claimed. Verified against real bright-on-dark ER tubule data:
+% the unnegated response was consistently negative (-0.05 to -0.10) at
+% the frame's 20 brightest pixels, and the old clamp-negative-to-zero
+% step discarded the entire tubule signal, leaving ~93% of the image
+% nonzero (background noise) and 0 at every one of those bright pixels.
+% Negating before the max/clamp (below) matches the bright-ridge
+% convention used elsewhere in this codebase (e.g. FrangiFilter2D's
+% BlackWhite=false).
+%
 % See also: AGlineDetectorSteerableConv2, steerGaussFilterOrder2
 
 if nargin < 2 || isempty(sigmas),    sigmas    = [2 3 4];      end
@@ -45,7 +58,8 @@ idx = 0;
 for is = 1:nS
     for it = 1:nT
         idx = idx + 1;
-        respAll(:,:,idx) = castfun( ...
+        % Negated -- see POLARITY note above.
+        respAll(:,:,idx) = -castfun( ...
             steerGaussFilterOrder2(im, thetas(it), sigmas(is), false));
     end
 end
@@ -57,7 +71,9 @@ end
 thetaIdx = mod(maxIdx - 1, nT) + 1;
 dirMap   = castfun(thetas(thetaIdx));
 
-% Clamp negatives (2nd-derivative filter responds negatively to dark ridges)
+% Clamp negatives -- after the sign flip above, negative here means the
+% (now-inverted) response still favours a dark ridge, i.e. no real bright
+% ridge at that pixel/orientation/scale.
 lineMap(lineMap < 0) = castfun(0);
 
 % Normalise to [0,1]
