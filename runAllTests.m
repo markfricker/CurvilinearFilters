@@ -66,6 +66,7 @@ suites = {
     'MFAT',            fullfile(root, 'MFAT',            'tests', 'TestMfat.m');
     'PhaseCongruency', fullfile(root, 'PhaseCongruency', 'tests', 'TestPhaseCongruency.m');
     'SOAGK',           fullfile(root, 'SOAGK',           'tests', 'TestSoagk.m');
+    'SteerGauss',      fullfile(root, 'SOAGK',           'tests', 'TestSteerGauss.m');
     'Vesselness',      fullfile(root, 'Vesselness',      'tests', 'TestVesselness.m');
     'BowlerHat',       fullfile(root, 'BowlerHat',       'tests', 'TestBowlerHat.m');
     'nERdy',           fullfile(root, 'nERdy',           'tests', 'TestNERdy.m');
