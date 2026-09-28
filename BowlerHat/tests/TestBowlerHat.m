@@ -127,6 +127,26 @@ classdef TestBowlerHat < matlab.unittest.TestCase
             tc.verifyGreaterThan(double(rodResp), double(blobResp));
         end
 
+        function testBH_radiiForm_matchesScaleForm(tc)
+            % BowlerHatFilter(I, radii, nOrient) with the same radii as the
+            % 4-argument form gives the identical result
+            I  = TestBowlerHat.rodImage();
+            r  = tc.MinScale:tc.MinScale+tc.NScales;
+            o4 = BowlerHatFilter(I, tc.MinScale, tc.NScales, tc.NOrient);
+            o3 = BowlerHatFilter(I, r, tc.NOrient);
+            tc.verifyEqual(o3, o4);
+        end
+
+        function testBH_radiiForm_stepAndRounding(tc)
+            % fractional radii are rounded and duplicates dropped; a
+            % one-element list is that single radius
+            I  = TestBowlerHat.rodImage();
+            oA = BowlerHatFilter(I, [2 4], tc.NOrient);
+            oB = BowlerHatFilter(I, [2.2 3.6 4.4], tc.NOrient);   % -> [2 4 4] -> [2 4]
+            tc.verifyEqual(oB, oA);
+            tc.verifyEqual(BowlerHatFilter(I, 4, tc.NOrient), BowlerHatFilter(I, 4, 0, tc.NOrient));
+        end
+
     end
 
 end

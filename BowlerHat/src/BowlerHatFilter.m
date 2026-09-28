@@ -2,6 +2,7 @@ function [imOut] = BowlerHatFilter(imIn,minScale,nScales,nOrientations)
 % BowlerHatFilter  Multiscale bowler-hat transform for curvilinear enhancement.
 %
 %   imOut = BowlerHatFilter(imIn, minScale, nScales, nOrientations)
+%   imOut = BowlerHatFilter(imIn, radii, nOrientations)
 %
 % OVERVIEW
 %   The bowler-hat transform enhances thin curvilinear structures (vessels,
@@ -22,6 +23,10 @@ function [imOut] = BowlerHatFilter(imIn,minScale,nScales,nOrientations)
 %   nScales       - Number of additional scales beyond minScale (radii run
 %                   minScale:minScale+nScales).
 %   nOrientations - Number of line orientations sampled over [0,180) deg.
+%   radii         - (3-argument form) explicit vector of disk/line radii
+%                   (px), e.g. sigmaMin:sigmaStep:sigmaMax. Rounded to
+%                   whole pixels (strel('disk') needs an integer radius)
+%                   and de-duplicated; values below 1 are raised to 1.
 %
 % OUTPUT
 %   imOut - Bowler-hat response, rescaled back to the input's intensity
@@ -34,7 +39,13 @@ function [imOut] = BowlerHatFilter(imIn,minScale,nScales,nOrientations)
 %
 mn = min(imIn,[],'all');
 mx = max(imIn,[],'all');
-r = minScale:minScale+nScales; %radius of the disk
+if nargin == 3
+    % BowlerHatFilter(imIn, radii, nOrientations)
+    nOrientations = nScales;
+    r = unique(max(1, round(double(minScale(:)'))));
+else
+    r = minScale:minScale+nScales; %radius of the disk
+end
 l = r.*2+1; % length of the line
 o = 0:180/nOrientations:180-180/nOrientations; %number of orientation
 imIn = im2single(imIn);
