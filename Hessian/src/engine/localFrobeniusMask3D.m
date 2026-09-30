@@ -1,7 +1,7 @@
-function imfMasked = localFrobeniusMask3D(imf, im, sigmas, frobDivision)
+function imfMasked = localFrobeniusMask3D(imf, im, sigmas, frobDivision, spacing)
 %LOCALFROBENIUSMASK3D  Zero out voxels with low multi-scale Hessian energy.
 %
-%   imfMasked = localFrobeniusMask3D(imf, im, sigmas, frobDivision)
+%   imfMasked = localFrobeniusMask3D(imf, im, sigmas, frobDivision, spacing)
 %
 % 3D counterpart of funcEnhanceDispatcher.m's local function
 % localFrobeniusMask (AnalyzERproject_sandbox/core/dispatchers/). Same
@@ -18,12 +18,13 @@ function imfMasked = localFrobeniusMask3D(imf, im, sigmas, frobDivision)
 %   imf         - the enhanced (vesselness/plateness/etc.) volume to mask,
 %                 any size/class
 %   im          - the ORIGINAL (pre-enhance) volume the Hessian is computed
-%                 from, same size as imf. Must already be on an isotropic
-%                 voxel grid -- applyHessian3D has no voxel-spacing input,
-%                 same caveat as the rest of this engine.
-%   sigmas      - vector of Gaussian scales (voxels) to take the per-voxel
-%                 max Frobenius norm over -- pass the SAME sigmas used to
-%                 produce imf, so the gate reflects the same scale range
+%                 from, same size as imf, on the SAME grid (native or
+%                 isotropic) that produced imf -- see `spacing`.
+%   sigmas      - vector of Gaussian scales to take the per-voxel max
+%                 Frobenius norm over -- pass the SAME sigmas (and same
+%                 units: pixel if spacing=[1 1 1], physical otherwise)
+%                 used to produce imf, so the gate reflects the same scale
+%                 range and axis-weighting hessian3DFilters actually used.
 %   frobDivision - bias divisor (default 2, matching Nellie's own default
 %                 and the 2D port): frobDivision=2 is a deliberately
 %                 permissive gate that only clears the clearly-empty
@@ -31,6 +32,15 @@ function imfMasked = localFrobeniusMask3D(imf, im, sigmas, frobDivision)
 %                 terms inside the response formulas to do the fine
 %                 discrimination. Larger frobDivision -> lower threshold
 %                 -> more permissive (more voxels survive).
+%   spacing     - [s1 s2 s3], physical voxel size per array dimension;
+%                 default [1 1 1] (isotropic pixel-space, unchanged
+%                 original behaviour via applyHessian3D). Pass the SAME
+%                 Spacing given to hessian3DFilters when imf came from its
+%                 anisotropic path -- otherwise the gate would pool raw
+%                 pixel-space curvatures across axes with very different
+%                 physical meaning (e.g. a coarse Z pixel's curvature
+%                 looking artificially small next to a fine XY pixel's),
+%                 systematically under-weighting real axial structure.
 %
 % OUTPUT
 %   imfMasked   - imf with background voxels (Frobenius norm below the
@@ -47,12 +57,20 @@ function imfMasked = localFrobeniusMask3D(imf, im, sigmas, frobDivision)
 if nargin < 4 || isempty(frobDivision)
     frobDivision = 2;
 end
+if nargin < 5 || isempty(spacing)
+    spacing = [1 1 1];
+end
+isAniso = ~isequal(spacing, [1 1 1]);
 
 frobMax = zeros(size(im), 'single');
 for s = sigmas
-    [Dxx,Dxy,Dxz,Dyy,Dyz,Dzz] = applyHessian3D(im, s);
-    Dxx = s^2*Dxx; Dxy = s^2*Dxy; Dxz = s^2*Dxz;
-    Dyy = s^2*Dyy; Dyz = s^2*Dyz; Dzz = s^2*Dzz;
+    if isAniso
+        [Dxx,Dxy,Dxz,Dyy,Dyz,Dzz] = applyHessian3DAniso(im, s, spacing);
+    else
+        [Dxx,Dxy,Dxz,Dyy,Dyz,Dzz] = applyHessian3D(im, s);
+        Dxx = s^2*Dxx; Dxy = s^2*Dxy; Dxz = s^2*Dxz;
+        Dyy = s^2*Dyy; Dyz = s^2*Dyz; Dzz = s^2*Dzz;
+    end
 
     % Frobenius norm of a symmetric matrix: sqrt(sum of squares of all
     % entries) = sqrt(diagonal^2 sum + 2*off-diagonal^2 sum) -- the exact

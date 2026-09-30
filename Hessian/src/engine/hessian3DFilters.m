@@ -14,10 +14,19 @@ function [response, scale] = hessian3DFilters(I, options)
 %        plateness -- see those functions' headers);
 %     5) aggregates responses by MAX-over-scales.
 %
-%   I MUST be on an isotropic voxel grid (resample anisotropic data
-%   first) -- eig3volume/regionprops3-style eigenvalue-based measures have
-%   no voxel-spacing input and are distorted by anisotropic voxels
-%   exactly as documented for trackMitometer3d.m.
+%   Two ways to handle anisotropic voxels, selected by 'Spacing':
+%     - 'Spacing' omitted or [1 1 1] (default): I is treated as an
+%       isotropic pixel grid and 'Sigmas' are plain pixel sigmas -- the
+%       original behaviour, unchanged, via hessianEigen3D.
+%     - 'Spacing' given as [s1 s2 s3] (physical voxel size per array
+%       dimension, e.g. microns): I is used on its NATIVE grid, no
+%       resampling -- 'Sigmas' are then PHYSICAL sigmas (same units as
+%       Spacing), and hessianEigen3DAniso does the per-axis pixel-sigma +
+%       physical-unit rescaling (see its header). This avoids the cost of
+%       isotropic resampling -- on a real 76-slice, 5.3x anisotropic ER
+%       volume, resampling inflated Z to 404 slices and cost ~450s per
+%       multiscale vesselness pass; the native-grid path works on the
+%       original 76 slices directly.
 %
 % SUPPORTED FILTERS (FilterType)
 %   'vesselness'   - Frangi vesselness (tubular structures)
@@ -25,11 +34,15 @@ function [response, scale] = hessian3DFilters(I, options)
 %                    e.g. ER cisternae -- has no adequate 2D analogue)
 %
 % INPUTS
-%   I              - 3D volume (numeric), isotropic voxel grid
+%   I              - 3D volume (numeric), native or isotropic grid (see Spacing)
 %
 % NAME-VALUE PAIRS
 %   'FilterType'   - filter to apply (default: 'vesselness')
-%   'Sigmas'       - vector of Gaussian scales, in voxels (default: auto)
+%   'Sigmas'       - vector of Gaussian scales -- pixel units if Spacing is
+%                    [1 1 1] (default), else physical units matching Spacing
+%   'Spacing'      - [s1 s2 s3], physical voxel size per array dimension;
+%                    default [1 1 1] (isotropic pixel-space behaviour,
+%                    unchanged from the original engine)
 %   'WhiteOnDark'  - true for bright structures on dark background (default: true)
 %   'Precision'    - 'single' or 'double' (default: 'single')
 %   'Parameters'   - struct of filter-specific parameters (alpha, beta, c)
@@ -52,10 +65,13 @@ arguments
     I (:,:,:) {mustBeNumeric}
     options.FilterType (1,:) char = 'vesselness'
     options.Sigmas = []
+    options.Spacing (1,3) double = [1 1 1]
     options.WhiteOnDark (1,1) logical = true
     options.Precision (1,:) char {mustBeMember(options.Precision,{'single','double'})} = 'single'
     options.Parameters = struct()
 end
+
+isAniso = ~isequal(options.Spacing, [1 1 1]);
 
 options = hessian3DPresets(I, options);
 sigmas = options.Sigmas;
@@ -77,7 +93,11 @@ end
 for k = 1:numel(sigmas)
     sigma = sigmas(k);
 
-    [L1, L2, L3] = hessianEigen3D(I, sigma, options.Precision);
+    if isAniso
+        [L1, L2, L3] = hessianEigen3DAniso(I, sigma, options.Spacing, options.Precision);
+    else
+        [L1, L2, L3] = hessianEigen3D(I, sigma, options.Precision);
+    end
 
     R = responseFcn(L1, L2, L3);
 
