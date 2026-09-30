@@ -20,11 +20,14 @@ function imfMasked = localFrobeniusMask3D(imf, im, sigmas, frobDivision, spacing
 %   im          - the ORIGINAL (pre-enhance) volume the Hessian is computed
 %                 from, same size as imf, on the SAME grid (native or
 %                 isotropic) that produced imf -- see `spacing`.
-%   sigmas      - vector of Gaussian scales to take the per-voxel max
-%                 Frobenius norm over -- pass the SAME sigmas (and same
-%                 units: pixel if spacing=[1 1 1], physical otherwise)
-%                 used to produce imf, so the gate reflects the same scale
-%                 range and axis-weighting hessian3DFilters actually used.
+%   sigmas      - Gaussian scales to take the per-voxel max Frobenius norm
+%                 over -- pass the SAME sigmas (same form, same units:
+%                 pixel if spacing=[1 1 1], physical otherwise) used to
+%                 produce imf, so the gate reflects the same scale range
+%                 and axis-weighting hessian3DFilters actually used. Either
+%                 a numeric vector (scalar steps, broadcast to all axes) or
+%                 a cell array of 3-element per-axis vectors -- see
+%                 hessian3DFilters.m's 'Sigmas' for the two forms.
 %   frobDivision - bias divisor (default 2, matching Nellie's own default
 %                 and the 2D port): frobDivision=2 is a deliberately
 %                 permissive gate that only clears the clearly-empty
@@ -63,7 +66,12 @@ end
 isAniso = ~isequal(spacing, [1 1 1]);
 
 frobMax = zeros(size(im), 'single');
-for s = sigmas
+for k = 1:numel(sigmas)
+    if iscell(sigmas)
+        s = sigmas{k};
+    else
+        s = sigmas(k);
+    end
     if isAniso
         [Dxx,Dxy,Dxz,Dyy,Dyz,Dzz] = applyHessian3DAniso(im, s, spacing);
     else

@@ -18,6 +18,21 @@ function [Dxx,Dxy,Dxz,Dyy,Dyz,Dzz] = applyHessian3DAniso(I, sigmaPhysical, spaci
 % cost ~450s per multiscale vesselness pass; this function works on the
 % native 76-slice grid directly.
 %
+% PER-AXIS SIGMA (added after real-data testing): sigmaPhysical may be a
+% SCALAR (one physical smoothing scale applied through all three axes --
+% the original behaviour) OR a 3-element vector [sigma1 sigma2 sigma3]
+% giving an INDEPENDENT physical scale per axis. This matters when lateral
+% and axial resolution are too different for one scale to serve both: on
+% real 5.3x-anisotropic ER data, forcing enough Z-sigma to get even 1
+% non-degenerate Z-pixel of smoothing (sigmaPhysical >= dz) forced the SAME
+% scalar through XY too, requiring >5 pixels of XY smoothing there --
+% coarser than the tubules themselves, so the filter stopped resolving
+% fine tubules and started responding to much larger rounded structures
+% instead (visually confirmed: vesselness went from tracing thin tubules
+% to tracing blob/crescent rims once s3 was forced >=1 with one shared
+% sigma). A per-axis vector lets XY stay matched to the true tubule width
+% while Z independently uses whatever is actually resolvable.
+%
 % AXIS CONVENTION -- matches applyHessian3D.m exactly: "Dxx" is the 2nd
 % derivative along array dimension 1, "Dyy" along dimension 2, "Dzz" along
 % dimension 3 (an internal x/y/z labelling choice that dates from the 2D
@@ -34,18 +49,22 @@ function [Dxx,Dxy,Dxz,Dyy,Dyz,Dzz] = applyHessian3DAniso(I, sigmaPhysical, spaci
 %   G(p1,p2,p3) = 1/((2pi)^1.5 s1 s2 s3) * exp(-(p1^2/2s1^2 + p2^2/2s2^2 + p3^2/2s3^2))
 %   d2G/dp1^2   = (p1^2/s1^4 - 1/s1^2) * G
 %   d2G/dp1dp2  = (p1*p2/(s1^2*s2^2)) * G
-%   (s1,s2,s3 = sigmaPhysical./spacing, i.e. PIXEL sigma per axis, chosen
-%   so the PHYSICAL smoothing scale is sigmaPhysical in every direction)
+%   (s1,s2,s3 = sigmaPhysical(i)./spacing, i.e. PIXEL sigma per axis, chosen
+%   so the PHYSICAL smoothing scale along axis i is sigmaPhysical(i))
 % then Dij_phys = Dij_pixel / (spacing_i * spacing_j) (chain rule: physical
 % position = pixel position * spacing, so d2/dXphys2 = d2/dXpix2 / spacing^2),
-% and finally Lindeberg scale normalisation by sigmaPhysical^2 (a single
-% scalar, since there is now only one physical sigma value shared across
-% axes -- that is the whole point of choosing per-axis pixel sigma this way).
+% and finally Lindeberg scale normalisation -- Dii by sigmaPhysical(i)^2,
+% Dij (i~=j) by sigmaPhysical(i)*sigmaPhysical(j) -- the standard
+% anisotropic-scale-space generalisation, per-entry rather than one shared
+% scalar. Reduces exactly to the original single-scalar formula when
+% sigma1=sigma2=sigma3.
 %
 % INPUTS
 %   I             : 3D volume, native (anisotropic) voxel grid
 %   sigmaPhysical : Gaussian scale, in the SAME physical units as spacing
-%                   (e.g. microns)
+%                   (e.g. microns). Scalar (applied to all 3 axes) or a
+%                   3-element [sigma1 sigma2 sigma3] vector (independent
+%                   per axis, same dimension order as spacing/size(I)).
 %   spacing       : [spacingDim1 spacingDim2 spacingDim3] -- physical size
 %                   of one voxel along each array dimension (i.e.
 %                   size(I) order). Pass [1 1 1] to recover plain
@@ -61,9 +80,13 @@ function [Dxx,Dxy,Dxz,Dyy,Dyz,Dzz] = applyHessian3DAniso(I, sigmaPhysical, spaci
 %
 % See also: applyHessian3D, hessianEigen3DAniso, eig3volume
 
-s1 = sigmaPhysical / spacing(1);
-s2 = sigmaPhysical / spacing(2);
-s3 = sigmaPhysical / spacing(3);
+if isscalar(sigmaPhysical)
+    sigmaPhysical = sigmaPhysical * [1 1 1];
+end
+
+s1 = sigmaPhysical(1) / spacing(1);
+s2 = sigmaPhysical(2) / spacing(2);
+s3 = sigmaPhysical(3) / spacing(3);
 
 r1 = max(1, round(3*s1));
 r2 = max(1, round(3*s2));
@@ -88,12 +111,12 @@ D12_pix = imfilter(I, DGauss12, 'conv', 'replicate');
 D13_pix = imfilter(I, DGauss13, 'conv', 'replicate');
 D23_pix = imfilter(I, DGauss23, 'conv', 'replicate');
 
-% Physical-unit rescaling (chain rule) + Lindeberg scale normalisation
-% (sigmaPhysical^2, a single scalar shared across all axes).
-Dxx = sigmaPhysical^2 * D11_pix / (spacing(1)*spacing(1));
-Dyy = sigmaPhysical^2 * D22_pix / (spacing(2)*spacing(2));
-Dzz = sigmaPhysical^2 * D33_pix / (spacing(3)*spacing(3));
-Dxy = sigmaPhysical^2 * D12_pix / (spacing(1)*spacing(2));
-Dxz = sigmaPhysical^2 * D13_pix / (spacing(1)*spacing(3));
-Dyz = sigmaPhysical^2 * D23_pix / (spacing(2)*spacing(3));
+% Physical-unit rescaling (chain rule) + PER-ENTRY Lindeberg scale
+% normalisation: Dii by sigmaPhysical(i)^2, Dij by sigmaPhysical(i)*sigmaPhysical(j).
+Dxx = sigmaPhysical(1)^2 * D11_pix / (spacing(1)*spacing(1));
+Dyy = sigmaPhysical(2)^2 * D22_pix / (spacing(2)*spacing(2));
+Dzz = sigmaPhysical(3)^2 * D33_pix / (spacing(3)*spacing(3));
+Dxy = sigmaPhysical(1)*sigmaPhysical(2) * D12_pix / (spacing(1)*spacing(2));
+Dxz = sigmaPhysical(1)*sigmaPhysical(3) * D13_pix / (spacing(1)*spacing(3));
+Dyz = sigmaPhysical(2)*sigmaPhysical(3) * D23_pix / (spacing(2)*spacing(3));
 end

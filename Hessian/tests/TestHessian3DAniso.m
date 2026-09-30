@@ -57,6 +57,117 @@ classdef TestHessian3DAniso < matlab.unittest.TestCase
             tc.verifyEqual(double(Dxy(mid,mid,mid)), 0, 'AbsTol', 2e-3);
         end
 
+        function testPerAxisSigma_scalarInput_matchesExplicitBroadcastVector(tc)
+            % Backward compatibility: a scalar sigmaPhysical must give
+            % BIT-IDENTICAL results to the equivalent explicit 3-element
+            % broadcast vector [sigma sigma sigma] -- the scalar form is
+            % defined as shorthand for the vector form, not a separate
+            % code path.
+            spacing = [1, 1, 3];
+            sz = 20;
+            V = single(rand(sz,sz,sz));
+            sigmaScalar = 2.5;
+
+            [Dxx1,Dxy1,Dxz1,Dyy1,Dyz1,Dzz1] = applyHessian3DAniso(V, sigmaScalar, spacing);
+            [Dxx2,Dxy2,Dxz2,Dyy2,Dyz2,Dzz2] = applyHessian3DAniso(V, [sigmaScalar sigmaScalar sigmaScalar], spacing);
+
+            tc.verifyEqual(Dxx1, Dxx2);
+            tc.verifyEqual(Dyy1, Dyy2);
+            tc.verifyEqual(Dzz1, Dzz2);
+            tc.verifyEqual(Dxy1, Dxy2);
+            tc.verifyEqual(Dxz1, Dxz2);
+            tc.verifyEqual(Dyz1, Dyz2);
+        end
+
+        function testPerAxisSigma_independentValues_recoverPhysicalCurvature(tc)
+            % Closed-form check with GENUINELY independent per-axis sigma
+            % (not just the scalar-broadcast case): a quadratic bowl along
+            % dim 1 has a fixed physical curvature 2a regardless of what
+            % sigma is used along dims 2/3, so an independent per-axis
+            % sigmaPhysical = [s1 s2 s3] with s1 ~= s2 ~= s3 must still
+            % recover the same Lindeberg-normalised Dxx (sigma1^2 * 2a) --
+            % this is what verifies the per-entry generalisation
+            % (Dii by sigma_i^2, Dij by sigma_i*sigma_j) rather than just
+            % the degenerate all-equal case.
+            spacing = [1, 1, 3];
+            sz = 24;
+            [P1,~,~] = ndgrid(1:sz,1:sz,1:sz);
+            c = (sz+1)/2;
+            a = 0.01;
+            V = single(a*(P1-c).^2);
+
+            % Deliberately all different, but each axis kept >=1 PIXEL
+            % (sigmaPerAxis(i)/spacing(i) >= 1): below that, the discrete
+            % 2nd-derivative-of-Gaussian kernel is under-resolved (e.g. a
+            % sigma of 0.267px needs a 3-tap kernel to approximate a
+            % derivative of a function narrower than one pixel) and picks
+            % up genuinely large discretisation error unrelated to any
+            % chain-rule bug -- exactly the "sigma floor" finding from the
+            % real anisotropic ER data this whole feature is motivated by.
+            sigmaPerAxis = [1.5, 2.5, 3.5];   % s = [1.5, 2.5, 1.1667] px
+            [Dxx,Dxy,~,Dyy,~,Dzz] = applyHessian3DAniso(V, sigmaPerAxis, spacing);
+            mid = round(sz/2);
+
+            expected = sigmaPerAxis(1)^2 * 2*a;
+            tc.verifyEqual(double(Dxx(mid,mid,mid)), expected, 'RelTol', 0.15);
+            tc.verifyEqual(double(Dyy(mid,mid,mid)), 0, 'AbsTol', 2e-3);
+            tc.verifyEqual(double(Dzz(mid,mid,mid)), 0, 'AbsTol', 2e-3);
+            tc.verifyEqual(double(Dxy(mid,mid,mid)), 0, 'AbsTol', 2e-3);
+        end
+
+        function testPerAxisSigma_recoversTubeDiscrimination_atMatchedXYScale(tc)
+            % The motivating real-data finding: on severely anisotropic
+            % data, flooring a SHARED scalar sigma so s3=sigma/dz>=1 (to
+            % get any non-degenerate Z smoothing at all) forces the same
+            % sigma through XY too, over-smoothing well past the true tube
+            % radius -- on the real plasmodium ER volume this visibly
+            % turned thin traced tubules into coarse rounded blobs. A
+            % per-axis sigma lets XY stay matched to the true tube radius
+            % (the value the well-discriminated baseline test above uses)
+            % while Z is independently floored to 1 native pixel, with no
+            % forced trade-off between the two axes. This is an absolute
+            % check (matching the >3x margin the matched-scalar baseline
+            % test requires) rather than a comparison against a synthetic
+            % "degraded" case: on this small phantom the shared-scalar
+            % case is not itself degraded enough to make a relative
+            % comparison a reliable signal (both regimes are far from the
+            % near-threshold behaviour the real, much larger, much more
+            % anisotropic volume showed) -- the real evidence for the
+            % degradation is the visual comparison on real data recorded
+            % in memory (hessian_3d_engine_2026_09_30.md), not this phantom.
+            [tube, sheet, spacing] = tc.anisoPhantoms();   % spacing = [1 1 3], tube radius 3px in XY
+
+            sigmaPerAxis = {[3*spacing(1), 3*spacing(1), spacing(3)]};   % s = [3, 3, 1] px
+            p.alpha = 0.5; p.beta = 0.5;
+            p.c = tc.estimateC(tube, sheet, sigmaPerAxis{1}, spacing);
+            Rtube  = hessian3DFilters(tube,  'FilterType','vesselness', 'Sigmas', sigmaPerAxis, 'Spacing', spacing, 'Parameters', p);
+            Rsheet = hessian3DFilters(sheet, 'FilterType','vesselness', 'Sigmas', sigmaPerAxis, 'Spacing', spacing, 'Parameters', p);
+
+            tc.verifyGreaterThan(max(Rtube(:)), 0.01);
+            tc.verifyGreaterThan(max(Rtube(:)), 3*max(Rsheet(:)));
+        end
+
+        function testPerAxisSigma_cellArrayPlumbing_hessian3DFiltersAndFrobeniusMask(tc)
+            % A minimal end-to-end check that the cell-array 'Sigmas' form
+            % is correctly unwrapped (not left as a 1x1 cell) by both
+            % hessian3DFilters and localFrobeniusMask3D -- the actual
+            % plumbing bug risk of adding a second input form.
+            [tube, ~, spacing] = tc.anisoPhantoms();
+            sigmaPerAxis = {[3*spacing(1), 3*spacing(1), spacing(3)]};
+            p.alpha = 0.5; p.beta = 0.5; p.c = 15;
+
+            [R, scaleOut] = hessian3DFilters(tube, 'FilterType','vesselness', ...
+                'Sigmas', sigmaPerAxis, 'Spacing', spacing, 'Parameters', p);
+            tc.verifyEqual(size(R), size(tube));
+            tc.verifyTrue(any(scaleOut(:) > 0));
+
+            masked = localFrobeniusMask3D(R, tube, sigmaPerAxis, 2, spacing);
+            tc.verifyEqual(size(masked), size(tube));
+            bgRegion = false(size(tube));
+            bgRegion(1:4, 1:4, 1) = true;
+            tc.verifyEqual(nnz(masked(bgRegion)), 0);
+        end
+
         function testChainRuleScaling_dim1TwiceAsCoarse_recoversSamePhysicalCurvature(tc)
             % A quadratic bowl has a FIXED true physical curvature (2a)
             % regardless of how finely/coarsely it happens to be sampled.

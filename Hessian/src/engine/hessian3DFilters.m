@@ -38,8 +38,25 @@ function [response, scale] = hessian3DFilters(I, options)
 %
 % NAME-VALUE PAIRS
 %   'FilterType'   - filter to apply (default: 'vesselness')
-%   'Sigmas'       - vector of Gaussian scales -- pixel units if Spacing is
-%                    [1 1 1] (default), else physical units matching Spacing
+%   'Sigmas'       - Gaussian scales, one of two forms:
+%                      * numeric vector, e.g. [1 2 3] -- N scalar scale
+%                        steps, each broadcast to all 3 axes (pixel units
+%                        if Spacing is [1 1 1] (default), else physical
+%                        units matching Spacing). Unchanged original form.
+%                      * cell array of 3-element vectors, e.g.
+%                        {[s1 s2 s3], [s1b s2b s3b]} -- N scale steps, each
+%                        with an INDEPENDENT physical scale per axis. Only
+%                        meaningful with a non-isotropic Spacing. Added for
+%                        severely anisotropic data where one shared scalar
+%                        sigma cannot serve both axes well: on real 5.3x
+%                        anisotropic ER data, forcing enough Z-sigma for
+%                        one non-degenerate Z-pixel (sigma>=dz) forced the
+%                        SAME scalar through XY, over-smoothing past the
+%                        true tubule width and shifting detection from fine
+%                        tubules to coarse blobs. Deliberately a cell array
+%                        (never a plain Nx3 numeric matrix) so a 3-element
+%                        numeric vector is never ambiguous between "3 scalar
+%                        steps" and "one per-axis entry".
 %   'Spacing'      - [s1 s2 s3], physical voxel size per array dimension;
 %                    default [1 1 1] (isotropic pixel-space behaviour,
 %                    unchanged from the original engine)
@@ -91,7 +108,11 @@ switch lower(options.FilterType)
 end
 
 for k = 1:numel(sigmas)
-    sigma = sigmas(k);
+    if iscell(sigmas)
+        sigma = sigmas{k};
+    else
+        sigma = sigmas(k);
+    end
 
     if isAniso
         [L1, L2, L3] = hessianEigen3DAniso(I, sigma, options.Spacing, options.Precision);
