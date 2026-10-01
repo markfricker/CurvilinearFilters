@@ -58,6 +58,9 @@ addpath(fullfile(root, 'BowlerHat', 'src'));
 % nERdy
 addpath(fullfile(root, 'nERdy', 'src'));
 
+% ERnet
+addpath(fullfile(root, 'ERnet', 'src'));
+
 % ---------------------------------------------------------------------------
 % Test suites — all are now matlab.unittest.TestCase classes
 % ---------------------------------------------------------------------------
@@ -70,6 +73,7 @@ suites = {
     'Vesselness',      fullfile(root, 'Vesselness',      'tests', 'TestVesselness.m');
     'BowlerHat',       fullfile(root, 'BowlerHat',       'tests', 'TestBowlerHat.m');
     'nERdy',           fullfile(root, 'nERdy',           'tests', 'TestNERdy.m');
+    'ERnet',           fullfile(root, 'ERnet',           'tests', 'TestERnet.m');
 };
 
 fprintf('\n');

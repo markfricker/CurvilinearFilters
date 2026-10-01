@@ -1,0 +1,16 @@
+# ERnet — extra packages installed into the existing nERdy venv
+# Venv location: %USERPROFILE%\venvs\nerdy (shared with nERdy+; it already
+# has torch/torchvision with CUDA 12.8, numpy, scipy, scikit-image)
+#
+# setupPythonEnvs('ernet') does all of this. By hand:
+#   & "$env:USERPROFILE\venvs\nerdy\Scripts\pip.exe" install -r requirements_ernet.txt
+#
+# MODEL FILES (downloaded by setupPythonEnvs('ernet') into
+# %USERPROFILE%\venvs\nerdy\ernet, not bundled — ERnet-v2 is GPL-3.0):
+#   swinir_rcab_arch.py  from https://github.com/charlesnchr/ERnet-v2
+#                        Training/archs/, commit 9cf4998593168a1348964b3e89eb031cd5d192a4
+#   20220306_ER_4class_swinir_nch1.pth  from the ERnet-v2 v2.0 release
+#
+# Tested on Python 3.11 / torch 2.11.0+cu128 and 2.14.1+cpu.
+
+einops==0.8.2
