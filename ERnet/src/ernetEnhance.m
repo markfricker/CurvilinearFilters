@@ -1,9 +1,10 @@
-function R = ernetEnhance(I, params)
+function [R, L] = ernetEnhance(I, params)
 % ernetEnhance  Deep-learning ER segmenter via ERnet (vision transformer)
 %
 % USAGE
 %   R = ernetEnhance(I)
 %   R = ernetEnhance(I, params)
+%   [R, L] = ernetEnhance(...)      % also ERnet's 4-class map
 %
 % INPUTS
 %   I       - 2-D grayscale image (any numeric class); converted to
@@ -19,12 +20,24 @@ function R = ernetEnhance(I, params)
 %                                       % A value in [0,1] is a fixed
 %                                       % threshold on P(ER) = 1 - P(background).
 %            .normalize   = true        % API consistency; R is always binary.
+%            .useCache    = true        % reuse the result for an identical
+%                                       % image + threshold (see CACHE)
 %
 % OUTPUTS
 %   R       - binary enhancement map, single precision, same size as I.
 %             Pixels in any ER class (tubule, sheet, sheet-based tubule)
 %             = 1; background = 0. Compatible with the [0,1] convention of
 %             the other enhancers and usable directly as a segmentation mask.
+%   L       - uint8 class map, same size as I: 0 background, 1 tubule,
+%             2 sheet, 3 sheet-based tubule (ERnet's most likely class,
+%             independent of params.threshold). Scale-sensitive -- see
+%             OVERVIEW before using the tubule/sheet split.
+%
+% CACHE
+%   The cisternae step ('ERnet' method) and the Enhance step run ERnet on
+%   the same frames, so the last 64 results are kept, keyed by an MD5 of
+%   the image bytes, size and threshold (so a changed image can never hit
+%   a stale entry). 'clear ernetEnhance' empties it.
 %
 % REQUIREMENTS
 %   The nERdy+ venv at %USERPROFILE%\venvs\nerdy (torch, scipy, numpy) plus
@@ -77,6 +90,7 @@ if nargin < 2, params = struct(); end
 if ~isfield(params, 'pythonExe'),  params.pythonExe  = '';     end
 if ~isfield(params, 'device'),     params.device     = 'auto'; end
 if ~isfield(params, 'threshold'),  params.threshold  = NaN;   end
+if ~isfield(params, 'useCache'),   params.useCache   = true;  end
 
 % --- input validation -------------------------------------------------------
 if size(I, 3) > 1
@@ -87,8 +101,38 @@ end
 
 I = im2single(I);
 
+% --- cache lookup -------------------------------------------------------------
+persistent cache cacheKeys
+if isempty(cache), cache = containers.Map(); cacheKeys = {}; end
+key = '';
+if params.useCache
+    key = ernetCacheKey(I, params.threshold);
+    if isKey(cache, key)
+        hit = cache(key);
+        R = hit.R;  L = hit.L;
+        return;
+    end
+end
+
 % --- run via persistent server ----------------------------------------------
-R = ernetRunViaServer(I, params);
+[R, L] = ernetRunViaServer(I, params);
+
+if params.useCache
+    cache(key) = struct('R', R, 'L', L);
+    cacheKeys{end+1} = key;
+    if numel(cacheKeys) > 64
+        remove(cache, cacheKeys{1});
+        cacheKeys(1) = [];
+    end
+end
+end
+
+
+function key = ernetCacheKey(I, threshold)
+md = java.security.MessageDigest.getInstance('MD5');
+md.update(typecast(I(:), 'int8'));
+md.update(typecast(double([size(I) threshold]), 'int8'));
+key = lower(reshape(dec2hex(typecast(md.digest(), 'uint8'), 2)', 1, []));
 end
 
 
@@ -96,7 +140,7 @@ end
 % Server communication
 % ============================================================================
 
-function R = ernetRunViaServer(I, params)
+function [R, L] = ernetRunViaServer(I, params)
 
 serverScript = ernetResolveServerScript();
 workDir      = fullfile(tempdir, 'ernet_work');
@@ -142,6 +186,29 @@ end
 result = load(resFile);
 delete(resFile);
 R = single(result.R);
+if isfield(result, 'L')
+    L = uint8(result.L);
+    return;
+end
+% A server started by an older ernetServer.py (it outlives MATLAB) returns
+% no class map: ask it to exit, wait for the process to end, and re-run --
+% the next call starts the current script.
+if isfield(params, 'restarted') && params.restarted
+    error('ernetEnhance:staleServer', ...
+          'ERnet server still returns no class map after a restart. Check %s.', ...
+          fullfile(workDir, 'server_startup.log'));
+end
+fid = fopen(fullfile(workDir, 'exit.req'), 'w'); fclose(fid);
+t0 = tic;
+while ernetServerAlive(pidFile) && toc(t0) < 15
+    pause(0.25);
+end
+if ernetServerAlive(pidFile)
+    pid = str2double(strtrim(fileread(pidFile)));
+    system(sprintf('taskkill /PID %d /F > NUL 2>&1', pid));
+end
+params.restarted = true;
+[R, L] = ernetRunViaServer(I, params);
 end
 
 

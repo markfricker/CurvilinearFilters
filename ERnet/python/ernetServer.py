@@ -27,6 +27,9 @@ Request fields (*.req.mat):
 Result file (*.res.mat):
     R — binary single [0, 1], same spatial size as I; 1 = any ER class
         (tubule, sheet or sheet-based tubule)
+    L — uint8 class map, same size: 0 background, 1 tubule, 2 sheet,
+        3 sheet-based tubule (SBT) -- ERnet's own argmax labels after its
+        class-order fix, independent of threshold
 
 The network is the single-frame SwinIR model (4 classes) — the only ERnet
 model with released weights. Preprocessing copies ERnet-v2's
@@ -228,12 +231,21 @@ while True:
 
                     # Channel 0 is background; 1-3 are the ER classes
                     # (ERnet's own post-hoc relabelling only permutes 1-3)
+                    raw = out.argmax(0)
                     if np.isnan(threshold):
-                        R = (out.argmax(0) != 0)
+                        R = (raw != 0)
                     else:
                         pEr = 1 - torch.softmax(out, 0)[0]
                         R = (pEr >= threshold)
-                    _result[0] = R.cpu().numpy().astype(np.float32)
+                    # Class map in ERnet's published order. Raw channel
+                    # indices map as model_evaluation.py's workaround:
+                    # raw 1 -> SBT, raw 2 -> tubule, raw 3 -> sheet
+                    raw = raw.cpu().numpy()
+                    L = np.zeros(raw.shape, dtype=np.uint8)
+                    L[raw == 2] = 1   # tubule
+                    L[raw == 3] = 2   # sheet
+                    L[raw == 1] = 3   # sheet-based tubule
+                    _result[0] = (R.cpu().numpy().astype(np.float32), L)
 
                 except Exception:
                     _result[1] = traceback.format_exc()
@@ -249,8 +261,8 @@ while True:
             if _result[1] is not None:
                 raise RuntimeError(_result[1])
 
-            R = _result[0]
-            sio.savemat(str(res_file), {'R': R}, format='5')
+            R, L = _result[0]
+            sio.savemat(str(res_file), {'R': R, 'L': L}, format='5')
             print(f'[server] done {time.time()-t0:.2f}s', flush=True)
 
         except Exception:

@@ -13,6 +13,11 @@ classdef TestERnet < matlab.unittest.TestCase
 %                                       ER and flat background is not
 %   testERnet_thresholdMonotone       – a lower P(ER) threshold keeps at least
 %                                       as many pixels as a higher one
+%   testERnet_classMapMatchesMask     – L is uint8 in 0..3 and L>0 equals the
+%                                       default (argmax) binary mask
+%   testERnet_cacheHitIdentical       – a repeat call returns the identical
+%                                       result without a server round trip,
+%                                       and a changed image is not a hit
 %
 % USAGE
 %   results = runtests('ERnet/tests/TestERnet');
@@ -129,6 +134,35 @@ classdef TestERnet < matlab.unittest.TestCase
             tc.verifyGreaterThanOrEqual(nnz(Rlo), nnz(Rhi));
             tc.verifyTrue(all(Rhi(:) <= Rlo(:)), ...
                 'Every pixel kept at threshold 0.8 must also be kept at 0.2');
+        end
+
+        function testERnet_classMapMatchesMask(tc)
+            tc.assumeTrue(TestERnet.isERnetAvailable(), ...
+                'ERnet not installed — test skipped');
+            [R, L] = ernetEnhance(TestERnet.latticeImage(128), struct('device', 'cpu'));
+            tc.verifyClass(L, 'uint8');
+            tc.verifySize(L, size(R));
+            tc.verifyLessThanOrEqual(max(L(:)), 3);
+            tc.verifyEqual(L > 0, R > 0, ...
+                'The default mask must be exactly the non-background classes');
+        end
+
+        function testERnet_cacheHitIdentical(tc)
+            tc.assumeTrue(TestERnet.isERnetAvailable(), ...
+                'ERnet not installed — test skipped');
+            I = TestERnet.latticeImage(128);
+            [R1, L1] = ernetEnhance(I, struct('device', 'cpu'));
+            t = tic;
+            [R2, L2] = ernetEnhance(I, struct('device', 'cpu'));
+            tHit = toc(t);
+            tc.verifyEqual(R2, R1);
+            tc.verifyEqual(L2, L1);
+            tc.verifyLessThan(tHit, 0.2, 'A cache hit should not go to the server');
+            % one changed pixel must miss the cache (result may still match)
+            I2 = I; I2(1) = 1 - I2(1);
+            t = tic;
+            ernetEnhance(I2, struct('device', 'cpu'));
+            tc.verifyGreaterThan(toc(t), tHit, 'A changed image must not hit the cache');
         end
 
     end
