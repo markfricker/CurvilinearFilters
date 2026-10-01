@@ -21,9 +21,10 @@ function R = platenessResponse3D(L1, L2, L3, alpha, beta, c)
 %   across the tube), a sheet has Ra near 0 (L2 much smaller than L3: only
 %   one dominant direction of curvature, across the sheet). Plateness is
 %   the same construction as vesselness with that one factor inverted --
-%   the standard way Frangi-style measures have been adapted for
-%   sheetness in the literature (e.g. Descoteaux et al. 2006, who built a
-%   liver-vessel/vessel-vs-sheet measure this exact way).
+%   the way Frangi-style measures have been adapted for sheetness in the
+%   literature (Descoteaux et al. 2006 built a multi-scale Hessian sheet
+%   measure for thin bone in CT along these lines; their blob term differs
+%   in detail from the Rb used here).
 %
 %   Requires |L1| <= |L2| <= |L3| (eig3volume's convention).
 %
@@ -37,9 +38,13 @@ function R = platenessResponse3D(L1, L2, L3, alpha, beta, c)
 %
 % REFERENCE
 %   Frangi A.F. et al. (1998) MICCAI 1998, LNCS 1496:130-137 (Ra/Rb/S
-%   construction). Descoteaux M. et al. (2006) "A multi-scale geometric
-%   flow for segmenting vasculature in MRI", Medical Image Analysis
-%   10(6):850-862 (the tube-vs-sheet response adaptation this mirrors).
+%   construction). Descoteaux M., Audette M., Chinzei K., Siddiqi K. (2006)
+%   "Bone enhancement filtering: application to sinus bone segmentation and
+%   simulation of pituitary surgery", Computer Aided Surgery 11(5):247-255,
+%   doi:10.3109/10929080601017212 (Hessian sheetness measure; conference
+%   version MICCAI 2005, LNCS 3749:9-16). [Corrected 2026-10-01: this
+%   reference previously gave a vessel-segmentation title with Medical Image
+%   Analysis 10(6):850-862, which is an unrelated paper.]
 %
 % See also: vesselnessResponse3D, hessian3DFilters, eig3volume
 
