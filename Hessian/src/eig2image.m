@@ -35,8 +35,14 @@ Ix(swap) = 2 * Dxy(swap);
 Iy(swap) = Dyy(swap) - Dxx(swap) - tmp(swap);
 
 % --- normalise eigenvectors ---
+% A subnormal magnitude (flat background in single precision) cannot be
+% normalised accurately (|v| came out ~0.94), and the direction there is
+% meaningless anyway: return a zero vector, as for mag == 0.
 mag = hypot(Ix, Iy);
-mag(mag == 0) = 1;
+tiny = mag < realmin(class(mag));
+Ix(tiny) = 0;
+Iy(tiny) = 0;
+mag(tiny) = 1;
 
 Ix = Ix ./ mag;
 Iy = Iy ./ mag;
