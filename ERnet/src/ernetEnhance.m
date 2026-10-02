@@ -129,10 +129,9 @@ end
 
 
 function key = ernetCacheKey(I, threshold)
-md = java.security.MessageDigest.getInstance('MD5');
-md.update(typecast(I(:), 'int8'));
-md.update(typecast(double([size(I) threshold]), 'int8'));
-key = lower(reshape(dec2hex(typecast(md.digest(), 'uint8'), 2)', 1, []));
+% keyHash is built in (no Java, which R2026b may lack). It is 64-bit and only
+% stable within a session, which is all this in-memory cache needs.
+key = sprintf('%016x', keyHash({class(I), size(I), threshold, I}));
 end
 
 
@@ -310,8 +309,7 @@ function serverScript = ernetResolveServerScript()
 % ernetServer.py sits in ../python relative to this file, in the dev layout
 % and in the toolbox (buildToolbox stages ERnet/src and ERnet/python).
 scriptDir    = fileparts(mfilename('fullpath'));   % .../ERnet/src
-serverScript = fullfile(scriptDir, '..', 'python', 'ernetServer.py');
-serverScript = char(java.io.File(serverScript).getCanonicalPath());
+serverScript = fullfile(fileparts(scriptDir), 'python', 'ernetServer.py');
 if ~isfile(serverScript)
     error('ernetEnhance:notFound', ...
           ['ernetServer.py not found.\n' ...

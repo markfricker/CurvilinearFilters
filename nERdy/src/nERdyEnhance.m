@@ -251,17 +251,16 @@ if isdeployed()
     if isfile(serverScript), return; end
 end
 scriptDir = fileparts(mfilename('fullpath')); % .../nERdy/src (or installed equiv.)
+% Three levels up, walked with fileparts so the path has no '..' (no Java needed)
+baseDir = fileparts(fileparts(fileparts(scriptDir)));
 % Toolbox bundle: staging/nERdy_integration/nerdyServer.py
-bundled = fullfile(scriptDir, '..', '..', '..', 'nERdy_integration', 'nerdyServer.py');
-bundled = char(java.io.File(bundled).getCanonicalPath());
+bundled = fullfile(baseDir, 'nERdy_integration', 'nerdyServer.py');
 if isfile(bundled)
     serverScript = bundled;
     return;
 end
 % Development layout: Matlab Projects/third party/nERdy integration/nerdyServer.py
-devPath = fullfile(scriptDir, '..', '..', '..', ...
-                   'third party', 'nERdy integration', 'nerdyServer.py');
-devPath = char(java.io.File(devPath).getCanonicalPath());
+devPath = fullfile(baseDir, 'third party', 'nERdy integration', 'nerdyServer.py');
 if isfile(devPath)
     serverScript = devPath;
     return;
