@@ -18,6 +18,9 @@ function R = nERdyEnhance(I, params)
 %                                       % binarisation.  NaN = use default
 %                                       % Otsu-based post-processing.
 %            .normalize   = true        % API consistency; R is always binary.
+%            .serverScript = ''         % Full path to nerdyServer.py.
+%                                       % '' = auto-locate (toolbox bundle,
+%                                       %   then dev layout).
 %
 % OUTPUTS
 %   R       - binary enhancement map, single precision, same size as I.
@@ -78,6 +81,7 @@ if nargin < 2, params = struct(); end
 if ~isfield(params, 'pythonExe'),  params.pythonExe  = '';     end
 if ~isfield(params, 'device'),     params.device     = 'auto'; end
 if ~isfield(params, 'threshold'),  params.threshold  = NaN;   end
+if ~isfield(params, 'serverScript'), params.serverScript = ''; end
 
 % --- input validation -------------------------------------------------------
 if size(I, 3) > 1
@@ -99,7 +103,7 @@ end
 
 function R = nerdyRunViaServer(I, params)
 
-serverScript = nerdyResolveServerScript();
+serverScript = nerdyResolveServerScript(params);
 workDir      = fullfile(tempdir, 'nerdy_work');
 if ~exist(workDir, 'dir'), mkdir(workDir); end
 
@@ -241,11 +245,21 @@ end
 
 
 
-function serverScript = nerdyResolveServerScript()
+function serverScript = nerdyResolveServerScript(params)
 % Search order:
+%   0. params.serverScript, if given (must exist; no fallback)
 %   1. Deployed CTF root (matlab compiler / toolbox deploy)
 %   2. nERdy_integration/ bundled in toolbox (staging root, 3 levels up)
 %   3. dev layout: 'third party/nERdy integration/' adjacent to all sandboxes
+if ~isempty(params.serverScript)
+    serverScript = char(params.serverScript);
+    if ~isfile(serverScript)
+        error('nERdyEnhance:notFound', ...
+              'nerdyServer.py not found at the given params.serverScript:\n%s', ...
+              serverScript);
+    end
+    return;
+end
 if isdeployed()
     serverScript = fullfile(ctfroot, 'nERdy_integration', 'nerdyServer.py');
     if isfile(serverScript), return; end

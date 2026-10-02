@@ -3,7 +3,7 @@ classdef TestNERdy < matlab.unittest.TestCase
 %
 % Tests that do NOT require the nERdy+ Python environment:
 %   testNERdy_badInput_3D_errors    – 3-D input throws nERdyEnhance:badInput
-%   testNERdy_scriptNotFound_errors – wrong path throws nERdyEnhance:notFound
+%   testNERdy_scriptNotFound_errors – missing params.serverScript throws nERdyEnhance:notFound
 %
 % Tests that DO require the nERdy+ Python environment (skipped when absent):
 %   testNERdy_smoke                 – no-crash run
@@ -66,8 +66,9 @@ classdef TestNERdy < matlab.unittest.TestCase
         end
 
         function testNERdy_scriptNotFound_errors(tc)
-            % Wrong nerdy_infer path must throw nERdyEnhance:notFound.
-            params.nerdyInfer = fullfile(tempdir(), 'nonexistent_nerdy_infer.py');
+            % A server-script path that does not exist must throw
+            % nERdyEnhance:notFound before any server is started.
+            params.serverScript = fullfile(tempdir(), 'nonexistent_nerdyServer.py');
             tc.verifyError( ...
                 @() nERdyEnhance(TestNERdy.grayImage(), params), ...
                 'nERdyEnhance:notFound');
