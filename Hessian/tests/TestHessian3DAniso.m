@@ -319,6 +319,32 @@ classdef TestHessian3DAniso < matlab.unittest.TestCase
             tc.verifyLessThan(tNative, tIso, ...
                 sprintf('native-grid path (%.3fs) should beat isotropic-resample (%.3fs) on anisotropic input', tNative, tIso));
         end
+
+        function testSeparable_matchesDenseKernels(tc)
+            % applyHessian3DAniso runs separable 1D passes (2026-10-03);
+            % rebuild the original dense 3D kernels here and check the six
+            % derivatives agree (incl. replicate-padded borders).
+            rng(1);
+            I = rand(21, 18, 9);
+            spacing = [0.1 0.1 0.35];
+            sigmaPhys = [0.22 0.22 0.4];
+            [Dxx,Dxy,Dxz,Dyy,Dyz,Dzz] = applyHessian3DAniso(I, sigmaPhys, spacing);
+
+            s = sigmaPhys ./ spacing;
+            r = max(1, round(3*s));
+            [P1,P2,P3] = ndgrid(-r(1):r(1), -r(2):r(2), -r(3):r(3));
+            G = exp(-(P1.^2/(2*s(1)^2) + P2.^2/(2*s(2)^2) + P3.^2/(2*s(3)^2))) / ((2*pi)^1.5*prod(s));
+            K = {(P1.^2/s(1)^4 - 1/s(1)^2).*G, (P1.*P2/(s(1)^2*s(2)^2)).*G, (P1.*P3/(s(1)^2*s(3)^2)).*G, ...
+                 (P2.^2/s(2)^4 - 1/s(2)^2).*G, (P2.*P3/(s(2)^2*s(3)^2)).*G, (P3.^2/s(3)^4 - 1/s(3)^2).*G};
+            ij = [1 1; 1 2; 1 3; 2 2; 2 3; 3 3];
+            got = {Dxx, Dxy, Dxz, Dyy, Dyz, Dzz};
+            for n = 1:6
+                ref = imfilter(I, K{n}, 'conv', 'replicate') ...
+                    * sigmaPhys(ij(n,1))*sigmaPhys(ij(n,2)) / (spacing(ij(n,1))*spacing(ij(n,2)));
+                tc.verifyEqual(got{n}, ref, 'AbsTol', 1e-10*max(abs(ref(:))) + 1e-12, ...
+                    sprintf('separable derivative %d differs from dense kernel', n));
+            end
+        end
     end
 
     methods (Access = private, Static)

@@ -91,25 +91,33 @@ s3 = sigmaPhysical(3) / spacing(3);
 r1 = max(1, round(3*s1));
 r2 = max(1, round(3*s2));
 r3 = max(1, round(3*s3));
-[P1,P2,P3] = ndgrid(-r1:r1, -r2:r2, -r3:r3);
 
-g = exp(-(P1.^2/(2*s1^2) + P2.^2/(2*s2^2) + P3.^2/(2*s3^2)));
-normConst = 1 / ((2*pi)^1.5 * s1 * s2 * s3);
-G = normConst * g;
+% SEPARABLE evaluation (2026-10-03). Every kernel above is a product of 1D
+% factors -- e.g. d2G/dp1^2 = g1''(p1)*g2(p2)*g3(p3), d2G/dp1dp2 =
+% g1'(p1)*g2'(p2)*g3(p3) -- and replicate padding commutes with separable
+% filtering, so 15 1D passes (3 along dim 3, 6 along dim 2, 6 along dim 1,
+% sharing the intermediates) give the same result as the six dense 3D
+% convolutions this function used to run, at a fraction of the cost
+% (kernel taps per voxel drop from ~6*(2r+1)^3 to ~15*(2r+1)). Verified
+% against the dense kernels in TestHessian3DAniso.
+[g1,h1,k1] = localGauss1D(s1, r1);
+[g2,h2,k2] = localGauss1D(s2, r2);
+[g3,h3,k3] = localGauss1D(s3, r3);
 
-DGauss11 = (P1.^2/s1^4 - 1/s1^2) .* G;
-DGauss22 = (P2.^2/s2^4 - 1/s2^2) .* G;
-DGauss33 = (P3.^2/s3^4 - 1/s3^2) .* G;
-DGauss12 = (P1.*P2 / (s1^2*s2^2)) .* G;
-DGauss13 = (P1.*P3 / (s1^2*s3^2)) .* G;
-DGauss23 = (P2.*P3 / (s2^2*s3^2)) .* G;
+A0 = localConv(I, g3, 3);  A1 = localConv(I, h3, 3);  A2 = localConv(I, k3, 3);
 
-D11_pix = imfilter(I, DGauss11, 'conv', 'replicate');
-D22_pix = imfilter(I, DGauss22, 'conv', 'replicate');
-D33_pix = imfilter(I, DGauss33, 'conv', 'replicate');
-D12_pix = imfilter(I, DGauss12, 'conv', 'replicate');
-D13_pix = imfilter(I, DGauss13, 'conv', 'replicate');
-D23_pix = imfilter(I, DGauss23, 'conv', 'replicate');
+B00 = localConv(A0, g2, 2);  B01 = localConv(A0, h2, 2);  B02 = localConv(A0, k2, 2);
+B10 = localConv(A1, g2, 2);  B11 = localConv(A1, h2, 2);
+B20 = localConv(A2, g2, 2);
+clear A0 A1 A2
+
+D11_pix = localConv(B00, k1, 1);
+D12_pix = localConv(B01, h1, 1);
+D22_pix = localConv(B02, g1, 1);
+D13_pix = localConv(B10, h1, 1);
+D23_pix = localConv(B11, g1, 1);
+D33_pix = localConv(B20, g1, 1);
+clear B00 B01 B02 B10 B11 B20
 
 % Physical-unit rescaling (chain rule) + PER-ENTRY Lindeberg scale
 % normalisation: Dii by sigmaPhysical(i)^2, Dij by sigmaPhysical(i)*sigmaPhysical(j).
@@ -119,4 +127,22 @@ Dzz = sigmaPhysical(3)^2 * D33_pix / (spacing(3)*spacing(3));
 Dxy = sigmaPhysical(1)*sigmaPhysical(2) * D12_pix / (spacing(1)*spacing(2));
 Dxz = sigmaPhysical(1)*sigmaPhysical(3) * D13_pix / (spacing(1)*spacing(3));
 Dyz = sigmaPhysical(2)*sigmaPhysical(3) * D23_pix / (spacing(2)*spacing(3));
+end
+
+% =========================================================================
+function [g, h, k] = localGauss1D(s, r)
+% 1D factors of the 3D kernels: g = normalised Gaussian, h = (p/s^2)*g
+% (first-derivative factor; the sign cancels in every product used),
+% k = (p^2/s^4 - 1/s^2)*g (second-derivative factor). The 1D norms
+% 1/(sqrt(2pi)*s) multiply to the 3D constant 1/((2pi)^1.5*s1*s2*s3).
+p = -r:r;
+g = exp(-p.^2/(2*s^2)) / (sqrt(2*pi)*s);
+h = (p/s^2) .* g;
+k = (p.^2/s^4 - 1/s^2) .* g;
+end
+
+function B = localConv(A, kern, dim)
+sz = ones(1, 3);
+sz(dim) = numel(kern);
+B = imfilter(A, reshape(kern, sz), 'conv', 'replicate');
 end
