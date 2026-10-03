@@ -154,7 +154,7 @@ classdef TestHessian3DAniso < matlab.unittest.TestCase
             % plumbing bug risk of adding a second input form.
             [tube, ~, spacing] = tc.anisoPhantoms();
             sigmaPerAxis = {[3*spacing(1), 3*spacing(1), spacing(3)]};
-            p.alpha = 0.5; p.beta = 0.5; p.c = 15;
+            p.alpha = 0.5; p.beta = 0.5;   % c from the data (hessian3DFrangiC)
 
             [R, scaleOut] = hessian3DFilters(tube, 'FilterType','vesselness', ...
                 'Sigmas', sigmaPerAxis, 'Spacing', spacing, 'Parameters', p);
@@ -249,7 +249,7 @@ classdef TestHessian3DAniso < matlab.unittest.TestCase
         function testFrobeniusMask3D_anisoPath_zerosBackground(tc)
             [tube, ~, spacing] = tc.anisoPhantoms();
             sigmaPhys = 3*spacing(1);
-            p.alpha = 0.5; p.beta = 0.5; p.c = 15;
+            p.alpha = 0.5; p.beta = 0.5;   % c from the data (hessian3DFrangiC)
 
             Rtube = hessian3DFilters(tube, 'FilterType','vesselness', ...
                 'Sigmas', sigmaPhys, 'Spacing', spacing, 'Parameters', p);
@@ -278,7 +278,7 @@ classdef TestHessian3DAniso < matlab.unittest.TestCase
             zRatio = spacing(3)/spacing(1);
 
             sigmaPhys = 3*spacing(1);
-            p.alpha = 0.5; p.beta = 0.5; p.c = 15;
+            p.alpha = 0.5; p.beta = 0.5;   % c from the data (hessian3DFrangiC)
 
             RtubeNative = hessian3DFilters(tube, 'FilterType','vesselness', ...
                 'Sigmas', sigmaPhys, 'Spacing', spacing, 'Parameters', p);
@@ -304,7 +304,7 @@ classdef TestHessian3DAniso < matlab.unittest.TestCase
             [tube, ~, spacing] = tc.anisoPhantoms();
             zRatio = spacing(3)/spacing(1);
             sigmaPhys = 3*spacing(1);
-            p.alpha = 0.5; p.beta = 0.5; p.c = 15;
+            p.alpha = 0.5; p.beta = 0.5;   % c from the data (hessian3DFrangiC)
 
             tNative = tic;
             hessian3DFilters(tube, 'FilterType','vesselness', 'Sigmas', sigmaPhys, 'Spacing', spacing, 'Parameters', p);
@@ -322,8 +322,11 @@ classdef TestHessian3DAniso < matlab.unittest.TestCase
 
         function testSeparable_matchesDenseKernels(tc)
             % applyHessian3DAniso runs separable 1D passes (2026-10-03);
-            % rebuild the original dense 3D kernels here and check the six
-            % derivatives agree (incl. replicate-padded borders).
+            % rebuild dense 3D kernels here and check the six derivatives
+            % agree (incl. replicate-padded borders). The dense kernels
+            % have the same moment-matched form, (c + d*p^2)*w for d2/dp^2
+            % and b*p*w for d/dp, coefficients from the discrete moments
+            % (see tc.momentMatched1D).
             rng(1);
             I = rand(21, 18, 9);
             spacing = [0.1 0.1 0.35];
@@ -333,9 +336,20 @@ classdef TestHessian3DAniso < matlab.unittest.TestCase
             s = sigmaPhys ./ spacing;
             r = max(1, round(3*s));
             [P1,P2,P3] = ndgrid(-r(1):r(1), -r(2):r(2), -r(3):r(3));
-            G = exp(-(P1.^2/(2*s(1)^2) + P2.^2/(2*s(2)^2) + P3.^2/(2*s(3)^2))) / ((2*pi)^1.5*prod(s));
-            K = {(P1.^2/s(1)^4 - 1/s(1)^2).*G, (P1.*P2/(s(1)^2*s(2)^2)).*G, (P1.*P3/(s(1)^2*s(3)^2)).*G, ...
-                 (P2.^2/s(2)^4 - 1/s(2)^2).*G, (P2.*P3/(s(2)^2*s(3)^2)).*G, (P3.^2/s(3)^4 - 1/s(3)^2).*G};
+            W = exp(-(P1.^2/(2*s(1)^2) + P2.^2/(2*s(2)^2) + P3.^2/(2*s(3)^2)));
+            [a, b, cd] = deal(zeros(1,3), zeros(1,3), zeros(2,3));
+            for d = 1:3
+                [a(d), b(d), cd(:,d)] = tc.momentMatched1D(s(d), r(d));
+            end
+            G = prod(a) * W;
+            K = {(cd(1,1) + cd(2,1)*P1.^2).*W*a(2)*a(3), b(1)*b(2)*P1.*P2.*W*a(3), b(1)*b(3)*P1.*P3.*W*a(2), ...
+                 (cd(1,2) + cd(2,2)*P2.^2).*W*a(1)*a(3), b(2)*b(3)*P2.*P3.*W*a(1), (cd(1,3) + cd(2,3)*P3.^2).*W*a(1)*a(2)};
+            % moments of the dense kernels themselves: zero DC, unit
+            % curvature gain on x^2/2, unit cross gain on x*y
+            tc.verifyEqual(sum(G(:)), 1, 'AbsTol', 1e-12);
+            tc.verifyEqual(sum(K{1}(:)), 0, 'AbsTol', 1e-12);
+            tc.verifyEqual(sum(P1(:).^2/2 .* K{1}(:)), 1, 'AbsTol', 1e-12);
+            tc.verifyEqual(sum(P1(:).*P2(:) .* K{2}(:)), 1, 'AbsTol', 1e-12);
             ij = [1 1; 1 2; 1 3; 2 2; 2 3; 3 3];
             got = {Dxx, Dxy, Dxz, Dyy, Dyz, Dzz};
             for n = 1:6
@@ -345,9 +359,66 @@ classdef TestHessian3DAniso < matlab.unittest.TestCase
                     sprintf('separable derivative %d differs from dense kernel', n));
             end
         end
+
+        function testInfiniteSheet_inPlaneEigenvalueIsZero(tc)
+            % A noiseless sheet, infinite in-plane (constant along dims 2/3,
+            % replicate padding): the in-plane curvature is exactly 0, so
+            % L2 must be ~0 while L3 is the curvature across it. The bare
+            % sampled d2G kernels did not sum to 0 and gave L2/L3 = 0.006
+            % to 0.02 (isotropic) and 0.2-0.38 when dim 3 has a sub-pixel
+            % sigma (3x anisotropic grid) -- fake negative curvature that
+            % passed the vesselness polarity gate and inflated Ra.
+            % Covers applyHessian3D too (hessianEigen3D).
+            for s = [0.5 0.75 1 2 4]
+                n1 = 2*round(3*s) + 41; c1 = (n1+1)/2;
+                V = zeros(n1, 9, 9);
+                V(c1,:,:) = 1;
+                V = 10 * imgaussfilt3(V, 1.5);   % intensity scale must not matter
+                [~, L2, L3] = hessianEigen3D(V, s, 'double');
+                tc.verifyLessThan(abs(L2(c1,5,5)), 1e-3*abs(L3(c1,5,5)), ...
+                    sprintf('isotropic, sigma=%g: in-plane L2 not ~0', s));
+                for spacing = {[1 1 1], [1 1 3]}
+                    [~, L2, L3] = hessianEigen3DAniso(V, s, spacing{1}, 'double');
+                    tc.verifyLessThan(abs(L2(c1,5,5)), 1e-3*abs(L3(c1,5,5)), ...
+                        sprintf('aniso %s, sigma=%g: in-plane L2 not ~0', mat2str(spacing{1}), s));
+                end
+            end
+        end
+
+        function testKernelGains_diagonalEqualsCross(tc)
+            % On f = x^2/2 (Dxx = 1) and f = x*y (Dxy = 1) the Lindeberg-
+            % normalised outputs must both be sigma^2, and a constant must
+            % give 0 -- also at sub-pixel sigma. With the bare sampled
+            % kernels the two gains differed (0.89 vs 0.96 at s=4, 1.40 vs
+            % 0.77 at s=0.5), making the eigenvalues orientation-dependent.
+            for s = [0.4 0.5 1 1.7 4]
+                r = max(1, round(3*s)); n = 2*r + 3; c = r + 2;
+                [X, Y, ~] = ndgrid((1:n)-c, (1:n)-c, 1:n);
+                Dq = cell(1,6); Dc = Dq; D0 = Dq;
+                [Dq{:}] = applyHessian3DAniso(X.^2/2, s, [1 1 1]);
+                [Dc{:}] = applyHessian3DAniso(X.*Y, s, [1 1 1]);
+                [D0{:}] = applyHessian3DAniso(7*ones(n,n,n), s, [1 1 1]);
+                tc.verifyEqual(Dq{1}(c,c,c), s^2, 'RelTol', 1e-10);
+                tc.verifyEqual(Dc{2}(c,c,c), s^2, 'RelTol', 1e-10);
+                for e = 1:6
+                    tc.verifyEqual(D0{e}(c,c,c), 0, 'AbsTol', 1e-12);
+                end
+            end
+        end
     end
 
     methods (Access = private, Static)
+        function [a, b, cd] = momentMatched1D(s, r)
+            % Coefficients of the 1D factors on w = exp(-p^2/2s^2):
+            % a*w (sum 1), b*p*w (first moment 1), (cd(1)+cd(2)*p^2)*w
+            % (sum 0, second moment 2) -- independent of the code under test.
+            p = -r:r;
+            w = exp(-p.^2/(2*s^2));
+            a = 1 / sum(w);
+            b = 1 / sum(p.^2 .* w);
+            cd = [sum(w), sum(p.^2.*w); sum(p.^2.*w), sum(p.^4.*w)] \ [0; 2];
+        end
+
         function c = estimateC(vol1, vol2, sigmaPhys, spacing)
             % Data-dependent calibration of the Frangi "c" (background/
             % noise suppression) parameter: c = max(Frobenius norm)/2,

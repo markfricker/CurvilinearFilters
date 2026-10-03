@@ -62,7 +62,11 @@ function [response, scale] = hessian3DFilters(I, options)
 %                    unchanged from the original engine)
 %   'WhiteOnDark'  - true for bright structures on dark background (default: true)
 %   'Precision'    - 'single' or 'double' (default: 'single')
-%   'Parameters'   - struct of filter-specific parameters (alpha, beta, c)
+%   'Parameters'   - struct of filter-specific parameters (alpha, beta, c);
+%                    alpha/beta default 0.5, c omitted -> from the data
+%                    (hessian3DFrangiC: half the max Hessian Frobenius norm
+%                    over these Sigmas/Spacing). A fixed c is only
+%                    meaningful for data of a known intensity scale.
 %
 % OUTPUTS
 %   R              - response volume (same size as I)
@@ -122,13 +126,19 @@ for k = 1:numel(sigmas)
 
     R = responseFcn(L1, L2, L3);
 
-    % Polarity gate (standard Frangi/Sato semantics, mirrors
-    % hessian2DFilters.m exactly): the response functions are
-    % polarity-symmetric, so one eigenvalue pass serves either sign.
+    % Polarity gate: the response functions are polarity-symmetric, so one
+    % eigenvalue pass serves either sign. Vesselness gates on L2 AND L3
+    % (Frangi: a bright tube curves down across both cross-section axes).
+    % Plateness gates on L3 ONLY (Descoteaux 2006): a bright sheet curves
+    % down only across its thickness; L1/L2 are the in-plane ~0 values
+    % whose sign is noise. Gating plate on L2 too zeroed 28% (sigma=1, 5%
+    % noise) to 46% (20% noise) of in-sheet voxels on a blurred-disk
+    % phantom (2026-10-03).
+    gateL2 = ~strcmpi(options.FilterType, 'plate');
     if options.WhiteOnDark
-        R(L2 >= 0 | L3 >= 0) = 0;
+        R(L3 >= 0 | (gateL2 & L2 >= 0)) = 0;
     else
-        R(L2 <= 0 | L3 <= 0) = 0;
+        R(L3 <= 0 | (gateL2 & L2 <= 0)) = 0;
     end
 
     mask = R > response;

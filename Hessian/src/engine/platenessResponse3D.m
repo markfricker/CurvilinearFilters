@@ -16,25 +16,29 @@ function R = platenessResponse3D(L1, L2, L3, alpha, beta, c)
 %   stage is needed for ER cisternae, not an optimisation on top of an
 %   already-adequate 2D pipeline.
 %
-%   Uses the SAME Ra/Rb/S primitives as vesselnessResponse3D -- a tube has
-%   Ra=|L2|/|L3| near 1 (L2 and L3 comparable: two directions of curvature
-%   across the tube), a sheet has Ra near 0 (L2 much smaller than L3: only
-%   one dominant direction of curvature, across the sheet). Plateness is
-%   the same construction as vesselness with that one factor inverted --
-%   the way Frangi-style measures have been adapted for sheetness in the
-%   literature (Descoteaux et al. 2006 built a multi-scale Hessian sheet
-%   measure for thin bone in CT along these lines; their blob term differs
-%   in detail from the Rb used here).
+%   Descoteaux et al. (2006) sheetness. Ra=|L2|/|L3| is the same primitive
+%   as vesselnessResponse3D -- near 1 for a tube (two directions of
+%   curvature across it), near 0 for a sheet (one, across its thickness)
+%   -- with the factor inverted. The blob term is Descoteaux's
+%     Rb = |2|L3| - |L2| - |L1|| / |L3|     (sheet ~2, tube ~1, blob ~0)
+%   used as (1 - exp(...)), so a blob is driven to zero.
+%   [Changed 2026-10-03 from the vesselness-style |L1|/sqrt(|L2*L3|),
+%   exp(-Rb^2...): that ratio is bounded (Rb^2 <= Ra, since |L1|<=|L2|),
+%   so it never destabilised, but on a sheet it is a ratio of two noise
+%   eigenvalues and barely suppressed blobs (term 0.20 vs 0.02 now, on a
+%   blurred-sphere phantom; sheet term 0.96 -> 1.00, tube 1.00 -> 0.89).]
 %
 %   Requires |L1| <= |L2| <= |L3| (eig3volume's convention).
 %
-%   R = exp(-Ra^2/2*alpha^2) * exp(-Rb^2/2*beta^2) * (1 - exp(-S^2/2*c^2))
+%   R = exp(-Ra^2/2*alpha^2) * (1 - exp(-Rb^2/2*beta^2)) * (1 - exp(-S^2/2*c^2))
 %
 %   Polarity is NOT applied here -- see vesselnessResponse3D's header;
-%   the caller (hessian3DFilters) applies the WhiteOnDark sign gate.
+%   the caller (hessian3DFilters) applies the WhiteOnDark sign gate, on L3
+%   only for this measure (the in-plane L1/L2 have a noise-driven sign).
 %
 % PARAMETERS
 %   ALPHA, BETA, C -- same roles and typical values as vesselnessResponse3D
+%   (Descoteaux use alpha = beta = 0.5; c data-dependent)
 %
 % REFERENCE
 %   Frangi A.F. et al. (1998) MICCAI 1998, LNCS 1496:130-137 (Ra/Rb/S
@@ -48,14 +52,13 @@ function R = platenessResponse3D(L1, L2, L3, alpha, beta, c)
 %
 % See also: vesselnessResponse3D, hessian3DFilters, eig3volume
 
-L2safe = L2; L2safe(L2safe == 0) = eps;
 L3safe = L3; L3safe(L3safe == 0) = eps;
 
 Ra = abs(L2) ./ abs(L3safe);
-Rb = abs(L1) ./ sqrt(abs(L2safe .* L3safe));
+Rb = abs(2*abs(L3) - abs(L2) - abs(L1)) ./ abs(L3safe);
 S  = sqrt(L1.^2 + L2.^2 + L3.^2);
 
 R = exp(-(Ra.^2) / (2*alpha^2)) .* ...
-    exp(-(Rb.^2) / (2*beta^2)) .* ...
+    (1 - exp(-(Rb.^2) / (2*beta^2))) .* ...
     (1 - exp(-(S.^2) / (2*c^2)));
 end

@@ -32,7 +32,9 @@ end
 
 [Dxx,Dxy,Dxz,Dyy,Dyz,Dzz] = applyHessian3D(I, sigma);
 
-% Scale normalisation (Lindeberg) -- matches hessianEigen2D's sigma^2 scaling
+% Scale normalisation (Lindeberg, gamma = 2) -- matches hessianEigen2D, and
+% hessianEigen3DAniso with spacing [1 1 1] exactly (applyHessian3D returns
+% the true derivative since 2026-10-03; before, the net factor was sigma^3)
 Dxx = sigma^2 * Dxx; Dxy = sigma^2 * Dxy; Dxz = sigma^2 * Dxz;
 Dyy = sigma^2 * Dyy; Dyz = sigma^2 * Dyz; Dzz = sigma^2 * Dzz;
 

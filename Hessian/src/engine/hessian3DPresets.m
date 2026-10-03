@@ -16,6 +16,12 @@ switch lower(options.FilterType)
     case {'vesselness','plate'}
         if ~isfield(options.Parameters,'alpha'), options.Parameters.alpha = 0.5; end
         if ~isfield(options.Parameters,'beta'),  options.Parameters.beta  = 0.5; end
-        if ~isfield(options.Parameters,'c'),     options.Parameters.c     = 15;  end
+        % c from the data unless given (was a fixed 15 before 2026-10-03;
+        % see hessian3DFrangiC). Needs the final Sigmas and Spacing.
+        if ~isfield(options.Parameters,'c') || isempty(options.Parameters.c)
+            spacing = [1 1 1];
+            if isfield(options, 'Spacing'), spacing = options.Spacing; end
+            options.Parameters.c = hessian3DFrangiC(I, options.Sigmas, spacing);
+        end
 end
 end

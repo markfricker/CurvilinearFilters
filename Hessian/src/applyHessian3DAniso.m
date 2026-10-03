@@ -42,10 +42,8 @@ function [Dxx,Dxy,Dxz,Dyy,Dyz,Dzz] = applyHessian3DAniso(I, sigmaPhysical, spaci
 % follows the SAME dimension order: spacing(1) is dim 1's voxel size,
 % spacing(2) is dim 2's, spacing(3) is dim 3's.
 %
-% DERIVATION (from the separable 3D Gaussian, not a rescaled copy of
-% applyHessian3D.m's isotropic kernel -- that file uses its own,
-% independently self-consistent normalisation convention that does not
-% generalise correctly to anisotropic sigma by simple substitution):
+% DERIVATION (from the separable 3D Gaussian; applyHessian3D is this
+% function with spacing [1 1 1], divided by sigma^2):
 %   G(p1,p2,p3) = 1/((2pi)^1.5 s1 s2 s3) * exp(-(p1^2/2s1^2 + p2^2/2s2^2 + p3^2/2s3^2))
 %   d2G/dp1^2   = (p1^2/s1^4 - 1/s1^2) * G
 %   d2G/dp1dp2  = (p1*p2/(s1^2*s2^2)) * G
@@ -67,12 +65,9 @@ function [Dxx,Dxy,Dxz,Dyy,Dyz,Dzz] = applyHessian3DAniso(I, sigmaPhysical, spaci
 %                   per axis, same dimension order as spacing/size(I)).
 %   spacing       : [spacingDim1 spacingDim2 spacingDim3] -- physical size
 %                   of one voxel along each array dimension (i.e.
-%                   size(I) order). Pass [1 1 1] to recover plain
-%                   isotropic pixel-space behaviour (a DIFFERENT,
-%                   independently self-consistent normalisation from
-%                   applyHessian3D.m -- use that function directly for the
-%                   isotropic case; this one is for genuinely anisotropic
-%                   spacing).
+%                   size(I) order). [1 1 1] gives plain isotropic
+%                   pixel-space behaviour, identical to
+%                   sigma^2 * applyHessian3D (i.e. hessianEigen3D).
 %
 % OUTPUTS
 %   Dxx,Dxy,Dxz,Dyy,Dyz,Dzz : the six unique 2nd derivatives, in PHYSICAL
@@ -99,7 +94,8 @@ r3 = max(1, round(3*s3));
 % sharing the intermediates) give the same result as the six dense 3D
 % convolutions this function used to run, at a fraction of the cost
 % (kernel taps per voxel drop from ~6*(2r+1)^3 to ~15*(2r+1)). Verified
-% against the dense kernels in TestHessian3DAniso.
+% against the dense kernels in TestHessian3DAniso. The 1D factors are
+% moment-matched rather than the bare sampled formulas -- see localGauss1D.
 [g1,h1,k1] = localGauss1D(s1, r1);
 [g2,h2,k2] = localGauss1D(s2, r2);
 [g3,h3,k3] = localGauss1D(s3, r3);
@@ -131,14 +127,34 @@ end
 
 % =========================================================================
 function [g, h, k] = localGauss1D(s, r)
-% 1D factors of the 3D kernels: g = normalised Gaussian, h = (p/s^2)*g
-% (first-derivative factor; the sign cancels in every product used),
-% k = (p^2/s^4 - 1/s^2)*g (second-derivative factor). The 1D norms
-% 1/(sqrt(2pi)*s) multiply to the 3D constant 1/((2pi)^1.5*s1*s2*s3).
+% 1D factors of the 3D kernels, with w = exp(-p^2/2s^2) on p = -r..r:
+%   g = a*w            smoothing factor        sum(g)     = 1
+%   h = b*p.*w         1st-derivative factor   sum(p.*h)  = 1  (conv gives -f';
+%                      the sign cancels in every product used)
+%   k = (c + d*p.^2).*w  2nd-derivative factor sum(k) = 0, sum(p.^2.*k) = 2
+% MOMENT-MATCHED (2026-10-03). These are the analytic shapes (the continuum
+% has a = 1/(sqrt(2pi)s), b = a/s^2, c = -a/s^2, d = a/s^4), but with the
+% coefficients fitted so the DISCRETE moments are exact: the Hessian is
+% then exact on any cubic, whatever s and r. The analytic coefficients,
+% sampled and truncated at r = round(3s), gave sum(k) ~= 0 -- a DC leak:
+% Dxx of a uniform region was -0.4% (s=1) to -2% (s=4) of the response to
+% unit curvature, -10% at s=0.5, so the in-plane L2 of a bright sheet read
+% negative (L2/L3 = 0.01-0.02 isotropic, 0.2-0.4 with a sub-pixel Z sigma
+% on a 3x anisotropic grid) and biased the polarity gate and Ra. They also
+% gave sum(p.^2.*k)/2 ~= sum(p.*h)^2 (0.89 vs 0.96 at s=4, 1.40 vs 0.77 at
+% s=0.5), so diagonal and cross derivatives had different gains and the
+% eigenvalues depended on orientation. Enlarging r to 4s would cut the
+% truncation part (~20x for s>=2) but not the sampling error at sub-pixel
+% s (the usual Z case), and costs 1/3 more taps; this costs nothing.
+% For r=1 it reduces to the central differences [1 -2 1] and [1 0 -1]/2.
 p = -r:r;
-g = exp(-p.^2/(2*s^2)) / (sqrt(2*pi)*s);
-h = (p/s^2) .* g;
-k = (p.^2/s^4 - 1/s^2) .* g;
+w = exp(-p.^2/(2*s^2));
+g = w / sum(w);
+h = p .* w;
+h = h / sum(p .* h);
+M = [sum(w), sum(p.^2.*w); sum(p.^2.*w), sum(p.^4.*w)];
+cd = M \ [0; 2];
+k = (cd(1) + cd(2)*p.^2) .* w;
 end
 
 function B = localConv(A, kern, dim)
