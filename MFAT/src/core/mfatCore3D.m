@@ -15,7 +15,10 @@ function geom = mfatCore3D(V, sigma, opts)
 %   ECCV Workshops (BioImage Computing), 2018.
 %
 % License:
-%   Academic / research use. Please cite the above work.
+%   Original MFAT code (github.com/Haifafh/MFAT): Apache License 2.0.
+%   Refactoring and extensions by MD Fricker: GPL-2.0-or-later.
+%   Distributed together, the Apache-2.0 terms are met by GPLv3.
+%   See THIRD_PARTY.md in the repository root. Please cite the above work.
 % =========================================================================
 
 % MFATCORE3D  MFAT geometry core for a volume (single scale)
